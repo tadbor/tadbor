@@ -1,0 +1,20 @@
+# Compiled binaries
+bin/
+main
+api
+
+# Test binaries and coverage
+*.test
+*.out
+coverage.txt
+
+# Air (live reload) temp output
+tmp/
+
+# Local env files
+.env
+.env.*
+!.env.example
+
+# Logs
+*.log

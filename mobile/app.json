@@ -1,0 +1,8 @@
+{
+  "expo": {
+    "plugins": [
+      "expo-audio",
+      "expo-asset"
+    ]
+  }
+}

@@ -1,0 +1,21 @@
+node_modules/
+.expo/
+dist/
+web-build/
+
+# Native build output
+*.orig.*
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+
+# Local env files
+.env*.local
+
+# Logs
+*.log
+
+# macOS
+.DS_Store
