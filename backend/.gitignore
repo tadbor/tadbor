@@ -1,7 +1,12 @@
 # Compiled binaries
-bin/
-main
-api
+#
+# These are anchored with a leading slash so they match only the build output
+# in this directory. Unanchored, "main" and "api" also matched any directory of
+# that name at any depth — which silently excluded cmd/api/ (the HTTP API
+# entrypoint) from version control entirely.
+/bin/
+/main
+/api
 
 # Test binaries and coverage
 *.test
@@ -9,7 +14,7 @@ api
 coverage.txt
 
 # Air (live reload) temp output
-tmp/
+/tmp/
 
 # Local env files
 .env

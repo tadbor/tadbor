@@ -544,7 +544,7 @@ func TestIngestedChunksAreRetrievableByExactVerse(t *testing.T) {
 		t.Fatalf("IngestSource: %v", err)
 	}
 
-	retrievalSvc := retrieval.NewService(db)
+	retrievalSvc := retrieval.NewService(db, nil)
 
 	evidence, err := retrievalSvc.GetEvidence(context.Background(), 12, 2, nil)
 	if err != nil {
@@ -566,11 +566,22 @@ func TestIngestedChunksAreRetrievableByExactVerse(t *testing.T) {
 		t.Fatal("retrieval did not see the chunk as source-verified")
 	}
 
-	// An unmapped verse currently falls through to the thematic chunk, because
-	// internal/retrieval/handlers.go passes no query embedding — thematic
-	// fallback needs one, which is Day 3 work. Asserted here to pin the boundary:
+	// An unmapped verse has no exact evidence, so it may only be answered by
+	// thematic search — and thematic search is only legitimate with a real query
+	// vector. With none, retrieval must refuse rather than hand back the
+	// thematic chunk unranked (Part 1 §12). Asserted here to pin the boundary:
 	// ingestion must not turn a thematic chunk into an exact-verse answer.
-	thematic, err := retrievalSvc.GetEvidence(context.Background(), 12, 40, nil)
+	if _, err := retrievalSvc.GetEvidence(context.Background(), 12, 40, nil); !errors.Is(err, retrieval.ErrInsufficientEvidence) {
+		t.Fatalf("an unmapped verse without a query embedding must be a gap, got %v", err)
+	}
+
+	// Given a query vector the thematic chunk is reachable, which confirms the
+	// content is there and it was the missing query that withheld it.
+	query, err := (&fakeEmbedder{}).Embed(context.Background(), []string{"verse forty"})
+	if err != nil {
+		t.Fatalf("embed query: %v", err)
+	}
+	thematic, err := retrievalSvc.GetEvidence(context.Background(), 12, 40, query[0])
 	if err != nil {
 		t.Fatalf("thematic fallback should answer an unmapped verse: %v", err)
 	}
@@ -602,7 +613,7 @@ func TestRevokedSourceDropsOutOfRetrieval(t *testing.T) {
 		t.Fatalf("Revalidate: %v", err)
 	}
 
-	if _, err := retrieval.NewService(db).GetEvidence(context.Background(), 12, 1, nil); !errors.Is(err, retrieval.ErrInsufficientEvidence) {
+	if _, err := retrieval.NewService(db, nil).GetEvidence(context.Background(), 12, 1, nil); !errors.Is(err, retrieval.ErrInsufficientEvidence) {
 		t.Fatalf("a revoked source must not serve evidence, got %v", err)
 	}
 }

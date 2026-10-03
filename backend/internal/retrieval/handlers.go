@@ -19,14 +19,16 @@ func RegisterRoutes(group *gin.RouterGroup, svc *Service) {
 			return
 		}
 
-		// A real query embedding would be computed for thematic fallback use;
-		// nil is fine here since exact mapping is tried first.
-		evidence, err := svc.GetEvidence(c.Request.Context(), surahID, ayah, nil)
+		// GetEvidenceForAyah runs exact mapping first and only computes a thematic
+		// query embedding if the ayah turns out to have no mapped evidence.
+		evidence, err := svc.GetEvidenceForAyah(c.Request.Context(), surahID, ayah)
 		if errors.Is(err, ErrInsufficientEvidence) {
 			c.JSON(http.StatusUnprocessableEntity, gin.H{"status": "INSUFFICIENT_EVIDENCE"})
 			return
 		}
 		if err != nil {
+			// A dependency failure here is not the same as "no evidence" and must
+			// not be reported as one, or a provider outage reads as a content gap.
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
