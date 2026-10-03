@@ -18,10 +18,18 @@ when its ayah range actually contains the requested ayah.
 
 > **VALIDATION BLOCKED — this is not a pass.**
 >
-> No ayah returned any evidence. That means the corpus retrieval is reading
-> from is empty or unapproved, so there is nothing to have validated. The
-> unblocking work is upstream: a Quran corpus (issue #2) and a verified
-> Tafsir source with ingested chunks (issue #3).
+> No ayah returned any evidence. The Quran corpus is now in place (issue #2
+> closed: 111 ayahs, each byte-identical to quran.com v4 Uthmani and
+> re-hashing correctly), so the remaining blocker is issue #3 — no Tafsir
+> source has been registered, approved, or ingested, leaving
+> `tafsir_chunks` empty. With no approved chunks there is nothing for
+> retrieval to return and nothing to have validated.
+>
+> That the corpus itself is not the blocker has been confirmed directly: with
+> a single synthetic thematic chunk in a throwaway database, all 111 ayahs move
+> to `NEEDS_REVIEW_THEMATIC`, which exercises the full path — real
+> `text_uthmani` read from the ayah, embedded, and matched against a chunk.
+> The synthetic chunk was discarded and was never written to `tadbor`.
 
 ## Per-ayah results
 
