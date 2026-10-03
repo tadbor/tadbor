@@ -9,7 +9,7 @@ export default async function SurahPage({
 }) {
   const surahId = Number(params.id);
   const reciters = await getReciters();
-  const activeReciter = searchParams.reciter || reciters?.[0]?.id;
+  const activeReciter = searchParams.reciter || reciters[0]?.id;
 
   const [ayahs, explanations, recitations] = await Promise.all([
     getAyahs(surahId),
@@ -18,17 +18,17 @@ export default async function SurahPage({
   ]);
 
   const explanationByAyah = new Map(
-    (explanations || []).map((e: any) => [e.ayah_start, e])
+    explanations.map((e) => [e.ayah_start, e] as const)
   );
   const audioByAyah = new Map(
-    (recitations || []).map((r: any) => [r.ayah_number, r])
+    recitations.map((r) => [r.ayah_number, r] as const)
   );
 
   return (
     <main style={{ maxWidth: 700, margin: "0 auto", padding: "2rem" }}>
       {/* Reciter switcher — plain links so no client JS is needed */}
       <div style={{ display: "flex", gap: "0.5rem", marginBottom: "1.5rem", flexWrap: "wrap" }}>
-        {(reciters || []).map((r: any) => (
+        {(reciters).map((r) => (
           <a
             key={r.id}
             href={`/surah/${surahId}?reciter=${r.id}`}
@@ -48,7 +48,7 @@ export default async function SurahPage({
         ))}
       </div>
 
-      {(ayahs || []).map((ayah: any) => {
+      {ayahs.map((ayah) => {
         const explanation = explanationByAyah.get(ayah.ayah_number);
         const audio = audioByAyah.get(ayah.ayah_number);
         return (
@@ -86,7 +86,7 @@ export default async function SurahPage({
                 <div style={{ fontWeight: 600, marginBottom: "0.5rem" }}>
                   💡 المعنى المبسط
                 </div>
-                <p>{(explanation as any).text}</p>
+                <p>{explanation.text}</p>
               </div>
             )}
           </section>
