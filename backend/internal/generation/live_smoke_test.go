@@ -13,16 +13,16 @@ func TestLiveSmoke(t *testing.T) {
 		Task:           "simplify",
 		TargetLanguage: "ar",
 		TargetStyle:    "simplified_ar",
-		Evidence: []string{
-			"Al-Tabari reports that Yusuf was the son of Jacob, and that his brothers cast him into a well.",
-			"Al-Tabari records that Jacob was deeply grieved by what happened to his son.",
+		Evidence: []Evidence{
+			{ID: "tabari-surah-12-1", Text: "Al-Tabari reports that Yusuf was the son of Jacob, and that his brothers cast him into a well."},
+			{ID: "tabari-surah-12-2", Text: "Al-Tabari records that Jacob was deeply grieved by what happened to his son."},
 		},
 	})
 	if err != nil {
 		t.Fatalf("live call: %v", err)
 	}
 	t.Logf("content: %s", out.Content)
-	t.Logf("refs=%v claims=%d warnings=%v confidence=%q requiresReview=%v",
+	t.Logf("refs=%v (must be chunk ids, not numbers) claims=%d warnings=%v confidence=%q requiresReview=%v",
 		out.SourceRefs, len(out.Claims), out.Warnings, out.Confidence, out.RequiresReview)
 	if err := Validate(out); err != nil {
 		t.Errorf("Validate rejected the draft: %v", err)

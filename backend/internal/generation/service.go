@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -24,10 +25,24 @@ type GenerationOutput struct {
 }
 
 type Request struct {
-	Task           string   // "simplify" | "translate" | "adapt_dialect"
-	TargetLanguage string   // "ar" | "en"
-	TargetStyle    string   // "simplified_ar" | "egyptian_ar" | "en"
-	Evidence       []string // text of retrieved, approved chunks only — never raw ayah with an open prompt
+	Task           string     // "simplify" | "translate" | "adapt_dialect"
+	TargetLanguage string     // "ar" | "en"
+	TargetStyle    string     // "simplified_ar" | "egyptian_ar" | "en"
+	Evidence       []Evidence // retrieved, approved chunks only — never raw ayah with an open prompt
+}
+
+// Evidence is one retrieved chunk: the stable chunk id the citation must carry,
+// and the text the model transforms.
+//
+// The id travels with the text on purpose. The model is shown the chunks as
+// "[1] ...", "[2] ..." and asked which ones its claims rest on; it answers with
+// those numbers. Translating a number back into a chunk id is arithmetic this
+// package does once, on the way out, because the alternative is every caller
+// doing it by hand — and a caller that forgets persists a citation like "1",
+// which resolves to nothing and reads as an explanation grounded in nothing.
+type Evidence struct {
+	ID   string
+	Text string
 }
 
 // provider adapts the pipeline's generation contract to one vendor's wire
@@ -149,6 +164,7 @@ func (s *Service) Generate(req Request) (*GenerationOutput, error) {
 
 	var lastStatus int
 	var lastBody []byte
+	var dropped []string
 	for attempt := 0; attempt <= s.maxRetries; attempt++ {
 		if attempt > 0 {
 			s.sleepFor(retryDelay(attempt, s.baseBackoff))
@@ -165,6 +181,10 @@ func (s *Service) Generate(req Request) (*GenerationOutput, error) {
 				return nil, err
 			}
 			out.RequiresReview = true // enforced regardless of what the provider returns
+			out.SourceRefs, dropped = resolveSourceRefs(out.SourceRefs, req.Evidence)
+			if len(dropped) > 0 {
+				out.Warnings = append(out.Warnings, dropped...)
+			}
 			return out, nil
 		}
 
@@ -229,6 +249,27 @@ func summarize(body []byte) string {
 		return s[:max] + "…"
 	}
 	return s
+}
+
+// resolveSourceRefs replaces the model's positional "[1]", "[2]" answers with
+// the chunk ids they stand for.
+//
+// A number that does not correspond to evidence that was actually sent is not
+// resolved and not passed through. Keeping it would mean a citation to a chunk
+// nobody can open, which is exactly what the reviewer dashboard is built to
+// catch — better to catch it here, and to tell the reviewer, than to publish it
+// and hope the dashboard is read. Those numbers come back as warnings so the
+// anomaly is visible rather than silently dropped.
+func resolveSourceRefs(refs []string, evidence []Evidence) (ids, dropped []string) {
+	for _, ref := range refs {
+		n, err := strconv.Atoi(strings.TrimSpace(ref))
+		if err != nil || n < 1 || n > len(evidence) {
+			dropped = append(dropped, fmt.Sprintf("the model cited evidence [%s], which was not provided", strings.TrimSpace(ref)))
+			continue
+		}
+		ids = append(ids, evidence[n-1].ID)
+	}
+	return ids, dropped
 }
 
 func systemPrompt() string {
