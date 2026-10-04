@@ -23,6 +23,12 @@
 //	-prune       delete stored chunks that the manifest no longer contains
 //	-batch       embedding batch size (default 32)
 //	-revalidate  re-apply the registry gate to a source's stored chunks, then exit
+//	-allow-unverified
+//	             preview a source that has not cleared the registry gate. Issue #5
+//	             needs this: a manifest's verse mapping has to be reviewable
+//	             before anyone approves the text, and every source starts
+//	             unverified. Rejected with -live, so it cannot become a way to
+//	             write unverified content.
 //
 // Everything except -live is a preview: it runs the usability gate, normalization,
 // chunking, validation, and resume accounting, then stops before the provider is
@@ -76,13 +82,14 @@ import (
 
 func main() {
 	var (
-		list       = flag.Bool("list", false, "list sources with their ingestion status, then exit")
-		revalidate = flag.Bool("revalidate", false, "re-apply the registry gate to a source's stored chunks, then exit")
-		sourceID   = flag.String("source", "", "source registry id to ingest")
-		manifest   = flag.String("manifest", "", "path to the source's JSON document manifest")
-		live       = flag.Bool("live", false, "call the embedding provider and write to MongoDB")
-		prune      = flag.Bool("prune", false, "delete stored chunks missing from the manifest")
-		batch      = flag.Int("batch", embedding.DefaultMaxBatchSize, "embedding batch size")
+		list            = flag.Bool("list", false, "list sources with their ingestion status, then exit")
+		revalidate      = flag.Bool("revalidate", false, "re-apply the registry gate to a source's stored chunks, then exit")
+		sourceID        = flag.String("source", "", "source registry id to ingest")
+		manifest        = flag.String("manifest", "", "path to the source's JSON document manifest")
+		live            = flag.Bool("live", false, "call the embedding provider and write to MongoDB")
+		prune           = flag.Bool("prune", false, "delete stored chunks missing from the manifest")
+		batch           = flag.Int("batch", embedding.DefaultMaxBatchSize, "embedding batch size")
+		allowUnverified = flag.Bool("allow-unverified", false, "preview a source that has not cleared the registry gate; rejected with -live")
 	)
 	flag.Parse()
 
@@ -153,10 +160,19 @@ func main() {
 		embedder = client
 	}
 
+	// -allow-unverified exists so a verse mapping can be reviewed before the text
+	// is approved, which is the state every source starts in. It must never be a
+	// way to write unverified content, so combining it with -live is refused here
+	// rather than quietly ignored deeper in the service.
+	if *allowUnverified && *live {
+		log.Fatal("-allow-unverified is a preview-only flag; it cannot be combined with -live")
+	}
+
 	report, err := ingestion.NewService(db, embedder).IngestSource(ctx, *sourceID, docs, ingestion.IngestOptions{
-		BatchSize:  *batch,
-		PruneStale: *prune,
-		DryRun:     !*live,
+		BatchSize:         *batch,
+		PruneStale:        *prune,
+		DryRun:            !*live,
+		PreviewUnverified: *allowUnverified,
 	})
 	if err != nil {
 		log.Printf("ingest failed: %v", err)

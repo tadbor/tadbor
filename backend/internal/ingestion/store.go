@@ -12,14 +12,16 @@ import (
 // Store owns every write the ingestion pipeline performs. Reads for retrieval
 // live in internal/retrieval and are not affected by anything here.
 type Store struct {
-	chunks  *mongo.Collection
-	sources *mongo.Collection
+	chunks   *mongo.Collection
+	mappings *mongo.Collection
+	sources  *mongo.Collection
 }
 
 func NewStore(db *mongo.Database) *Store {
 	return &Store{
-		chunks:  db.Collection("tafsir_chunks"),
-		sources: db.Collection("sources"),
+		chunks:   db.Collection("tafsir_chunks"),
+		mappings: db.Collection("chunk_ayah_mappings"),
+		sources:  db.Collection("sources"),
 	}
 }
 
@@ -55,6 +57,29 @@ func (s *Store) EnsureIndexes(ctx context.Context) error {
 				{Key: "source_version", Value: 1},
 			},
 			Options: options.Index().SetName("source_manifest"),
+		},
+	})
+	if err != nil {
+		return err
+	}
+
+	// The mapping table is queried the way Part 1 §8 describes it: by verse
+	// range, to answer what speaks about a given ayah.
+	_, err = s.mappings.Indexes().CreateMany(ctx, []mongo.IndexModel{
+		{
+			Keys: bson.D{
+				{Key: "surah_id", Value: 1},
+				{Key: "ayah_start", Value: 1},
+				{Key: "ayah_end", Value: 1},
+			},
+			Options: options.Index().SetName("verse_range_lookup"),
+		},
+		{
+			Keys: bson.D{
+				{Key: "source_id", Value: 1},
+				{Key: "source_version", Value: 1},
+			},
+			Options: options.Index().SetName("mapping_manifest"),
 		},
 	})
 	return err

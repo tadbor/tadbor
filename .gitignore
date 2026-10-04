@@ -27,6 +27,16 @@ coverage/
 # Go build artifacts
 backend/bin/
 backend/main
+# `go build ./cmd/<name>` in backend/ drops a binary named after the command
+# next to the packages; each one needs its own line or they get committed.
+backend/api
+backend/build_manifest
+backend/check_coverage
+backend/fetch_tafsir
+backend/ingest
+backend/register_source
+backend/seed_quran
+backend/validate_retrieval
 *.exe
 *.dll
 *.so

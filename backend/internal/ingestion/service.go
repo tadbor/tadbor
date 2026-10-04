@@ -28,6 +28,10 @@ type IngestOptions struct {
 	// DryRun performs the gate, chunking, validation, and resume accounting but
 	// makes no provider calls and writes nothing.
 	DryRun bool
+	// PreviewUnverified lets a DryRun run against a source that has not cleared
+	// the registry gate, so a manifest can be reviewed before anyone approves the
+	// text. It is ignored — and the gate is enforced — whenever DryRun is false.
+	PreviewUnverified bool
 }
 
 // IngestReport is the audit record of one run: what the manifest contained, what
@@ -42,8 +46,13 @@ type IngestReport struct {
 	Embedded      int    `json:"embedded"`
 	EmbedCalls    int    `json:"embed_calls"`
 	Written       int    `json:"written"`
-	Deleted       int    `json:"deleted"`
-	DryRun        bool   `json:"dry_run"`
+	// Mapped counts the Part 1 §8 mapping rows written alongside the chunks.
+	// It equals Written on every successful run; a difference means the mapping
+	// table and the chunk collection have drifted.
+	Mapped          int  `json:"mapped"`
+	Deleted         int  `json:"deleted"`
+	DeletedMappings int  `json:"deleted_mappings"`
+	DryRun          bool `json:"dry_run"`
 }
 
 // Service is the IngestionService of docs/rag-architecture-part2.md §25: an
@@ -94,7 +103,19 @@ func (s *Service) IngestSource(ctx context.Context, sourceID string, docs []Docu
 		return rep, fmt.Errorf("check source %s: %w", sourceID, err)
 	}
 	if !usable {
-		return rep, fmt.Errorf("source %s: %w", sourceID, ErrSourceNotUsable)
+		// Part 1 §6 makes verification the gate on a source's content ever
+		// reaching the LLM, and it is not ours to waive. But an unverified source
+		// is exactly the state during issue #5, when a manifest's verse mapping
+		// has to be reviewed before anyone approves the text. A preview writes
+		// nothing and contacts no provider, so allowing one lets that review
+		// happen without weakening the gate on real content.
+		if !opts.PreviewUnverified {
+			return rep, fmt.Errorf("source %s: %w", sourceID, ErrSourceNotUsable)
+		}
+		if !opts.DryRun {
+			return rep, fmt.Errorf("source %s: %w (AllowUnverified only applies to a preview; "+
+				"it cannot be used to write unverified content)", sourceID, ErrSourceNotUsable)
+		}
 	}
 
 	if err := s.store.EnsureIndexes(ctx); err != nil {
@@ -231,6 +252,20 @@ func (s *Service) IngestSource(ctx context.Context, sourceID string, docs []Docu
 	}
 	rep.Written = int(res.MatchedCount + res.UpsertedCount)
 
+	// Part 1 §8's mapping table, written from the same slice in the same step so
+	// the two cannot disagree: a chunk that reaches storage always has its
+	// mapping, and no mapping can exist for a chunk that does not.
+	mappings, err := MappingsFor(embedded)
+	if err != nil {
+		_ = s.registry.SetIngestionStatus(ctx, sourceID, StatusFailed)
+		return rep, fmt.Errorf("build ayah mappings: %w", err)
+	}
+	if _, err := s.store.UpsertMappings(ctx, mappings); err != nil {
+		_ = s.registry.SetIngestionStatus(ctx, sourceID, StatusFailed)
+		return rep, fmt.Errorf("upsert ayah mappings: %w", err)
+	}
+	rep.Mapped = len(mappings)
+
 	if err := s.finish(ctx, src.ID, sourceVersion, keep, opts.PruneStale, &rep); err != nil {
 		return rep, err
 	}
@@ -246,6 +281,16 @@ func (s *Service) finish(ctx context.Context, sourceID, sourceVersion string, ke
 			return fmt.Errorf("delete stale chunks: %w", err)
 		}
 		rep.Deleted = int(deleted)
+
+		// Pruning has to take the mappings with it. A mapping left pointing at a
+		// deleted chunk would make coverage reporting claim evidence that
+		// retrieval can no longer serve.
+		gone, err := s.store.DeleteStaleMappings(ctx, sourceID, sourceVersion, keep)
+		if err != nil {
+			_ = s.registry.SetIngestionStatus(ctx, sourceID, StatusFailed)
+			return fmt.Errorf("delete stale mappings: %w", err)
+		}
+		rep.DeletedMappings = int(gone)
 	}
 	if err := s.registry.MarkIngested(ctx, sourceID, timestamp()); err != nil {
 		return fmt.Errorf("mark source ingested: %w", err)

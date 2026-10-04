@@ -30,6 +30,14 @@ when its ayah range actually contains the requested ayah.
 > to `NEEDS_REVIEW_THEMATIC`, which exercises the full path — real
 > `text_uthmani` read from the ayah, embedded, and matched against a chunk.
 > The synthetic chunk was discarded and was never written to `tadbor`.
+>
+> **Updated 2026-10-04 (issue #5).** The source and the chunking now exist:
+> Ibn Kathir is registered and its 111 ayahs are chunked and mapped with full
+> coverage — see `docs/tafsir-chunk-mapping.md`. This validation still shows 111
+> gaps for one reason only: `ibn-kathir-ar` remains `unverified`, so a live
+> ingest is refused and retrieval filters every chunk out on
+> `source_verified`. The blocker is now human verification of the text, not
+> missing corpus or missing mapping.
 
 ## Per-ayah results
 

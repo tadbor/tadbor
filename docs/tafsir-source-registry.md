@@ -124,8 +124,17 @@ record: blocked as registered, usable once verification alone is flipped —
 which also proves the record carries every other field the gate reads — and
 blocked again if licensing is withdrawn.
 
-`tafsir_chunks` is empty and `ingestion_status` is `not_started`. Ingestion is
-issue #5.
+`tafsir_chunks` is empty and `ingestion_status` is `not_started` in the real
+`tadbor` database. Ingestion was issue #5 and has been carried out against a
+throwaway probe database: 111 of 111 ayahs mapped, 454 chunks, no drift. Nothing
+was written to `tadbor`, so `ingestion_status` is correctly still `not_started`.
+See `docs/tafsir-chunk-mapping.md`.
+
+Until verification is done, the only way to exercise this source is
+`ingest -allow-unverified`, which is accepted for a preview only and refused when
+combined with `-live`. That is what made issue #5 reviewable: the mapping had to
+be inspectable before anyone approved the text, and the gate previously refused
+even a preview.
 
 ## Not verified
 
