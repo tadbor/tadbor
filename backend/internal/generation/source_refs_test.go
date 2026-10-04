@@ -66,7 +66,7 @@ func TestValidateFailsWhenOnlyClaimLosesItsRef(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Generate: %v", err)
 	}
-	if err := Validate(out); err == nil {
+	if err := Validate(testRequest(), out); err == nil {
 		t.Error("Validate accepted a claim whose only citation did not resolve")
 	}
 }
