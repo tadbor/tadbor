@@ -169,7 +169,7 @@ func parentChunkID(sourceID, sourceVersion string, section ChunkKey) string {
 }
 
 // ContentHash is the sha256 of a chunk's text, matching the ayah corpus
-// convention in scripts/seed_quran.go.
+// convention in cmd/seed_quran.
 func ContentHash(text string) string {
 	sum := sha256.Sum256([]byte(text))
 	return hex.EncodeToString(sum[:])

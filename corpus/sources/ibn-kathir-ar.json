@@ -1,0 +1,49 @@
+{
+  "source": {
+    "id": "ibn-kathir-ar",
+    "title": "تفسير ابن كثير",
+    "author": "الإمام ابن كثير الدمشقي",
+    "language": "ar",
+    "authority_tier": 1,
+
+    "licensing_status": "cleared",
+    "verification_status": "unverified",
+
+    "edition": "quran.com/ar-tafsir-ibn-kathir",
+    "methodology_classification": "narration-based",
+
+    "ingestion_status": "not_started",
+    "raw_text_ref": "corpus/tafsir/ar-tafsir-ibn-kathir-surah-12.md",
+
+    "metadata": {
+      "licensing_basis": "public domain",
+      "licensing_note": "Ibn Kathir died in 774 AH / 1373 CE, roughly six centuries before this text was digitised, so the work itself is out of copyright. The value 'cleared' is the one internal/ingestion.SourceRegistry.IsUsable compares against; the descriptive basis is recorded here because docs/rag-architecture-part1.md §6 words this field as 'public domain / licensed / pending rights clearance', which is a different vocabulary from the one the gate uses.",
+      "digitisation": "third-party; the text is a quran.com API response, not a scan of a physical printing",
+      "death_year_ah": 774,
+      "death_year_ce": 1373,
+      "upstream_resource_id": 14,
+      "upstream_slug": "ar-tafsir-ibn-kathir",
+      "coverage": "Surah Yusuf (12) only, 111 ayahs",
+      "known_caveats": [
+        "Ayah 1 opens with the surah preamble (تفسير سورة يوسف) and Ibn Kathir's hadith on teaching Surat Yusuf, so it is matn-as-surah commentary rather than word-by-word exegesis of the verse.",
+        "Entry lengths vary from 88 to 9830 characters; the long entries on 12:3 and 12:106 carry long chains of narration that will need paragraph-level chunking rather than one chunk per ayah.",
+        "Citations and Quranic quotations appear inline in square and round brackets; they were kept in the text because Part 1 §7 treats footnotes as structure rather than noise."
+      ],
+      "verification_note": "unverified by design (issue #3). Human spot-check of the text against a printed edition has not happened yet, so the source is unusable by retrieval until a reviewer sets verification_status to verified."
+    }
+  },
+
+  "version": {
+    "id": "ibn-kathir-ar-qurancom-2026-10-04",
+    "edition": "quran.com/ar-tafsir-ibn-kathir",
+    "version_label": "quran.com tafsir resource 14 snapshot retrieved 2026-10-04",
+    "raw_text_ref": "corpus/tafsir/ar-tafsir-ibn-kathir-surah-12.md"
+  },
+
+  "tafsir_document": {
+    "id": "ibn-kathir-ar-surah-12",
+    "content_type": "tafsir",
+    "surah_id": 12,
+    "ayah_count": 111
+  }
+}

@@ -54,6 +54,8 @@ import (
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
+
+	"tadbor/backend/internal/quran"
 )
 
 // corpusVersion identifies the exact text this data came from. It is written to
@@ -62,25 +64,6 @@ import (
 const corpusVersion = "quran.com-v4-uthmani"
 
 // ayahCounts holds the canonical ayah count of every surah, needed to locate a
-// surah inside Tanzil's flat one-ayah-per-line export. Standard, stable data; the
-// extraction is still validated against the primary source afterwards.
-var ayahCounts = []int{
-	7, 286, 200, 176, 120, 165, 206, 75,
-	129, 109, 123, 111, 43, 52, 99, 128,
-	111, 110, 98, 135, 112, 78, 118, 64,
-	77, 227, 93, 88, 69, 60, 34, 30,
-	73, 54, 45, 83, 182, 88, 75, 85,
-	54, 53, 89, 59, 37, 35, 38, 29,
-	18, 45, 60, 49, 62, 55, 78, 96,
-	29, 22, 24, 13, 14, 11, 11, 18,
-	12, 12, 30, 52, 52, 44, 28, 28,
-	20, 56, 40, 31, 50, 40, 46, 42,
-	29, 19, 36, 25, 22, 17, 19, 26,
-	30, 20, 15, 21, 11, 8, 8, 19,
-	5, 8, 8, 11, 11, 8, 3, 9,
-	5, 4, 7, 3, 6, 3, 5, 4,
-	5, 6,
-}
 
 type ayahDoc struct {
 	SurahID       int    `bson:"surah_id"`
@@ -261,7 +244,7 @@ func fetchAlquranCloud(ctx context.Context, surah int) (map[int]string, error) {
 // fetchTanzil reads Tanzil's own Uthmani text export, the authority issue #2
 // names, and returns it keyed by ayah number for the requested surah.
 func fetchTanzil(ctx context.Context, surah int) (map[int]string, error) {
-	if surah < 1 || surah > len(ayahCounts) {
+	if surah < 1 || surah > len(quran.AyahCounts) {
 		return nil, fmt.Errorf("surah %d out of range", surah)
 	}
 	body, err := get(ctx, "https://tanzil.net/pub/download/index.php?quranType=uthmani&outType=txt&agree=true")
@@ -272,9 +255,9 @@ func fetchTanzil(ctx context.Context, surah int) (map[int]string, error) {
 
 	offset := 0
 	for i := 0; i < surah-1; i++ {
-		offset += ayahCounts[i]
+		offset += quran.AyahCounts[i]
 	}
-	want := ayahCounts[surah-1]
+	want := quran.AyahCount(surah)
 	if offset+want > len(lines) {
 		return nil, fmt.Errorf("tanzil export has %d lines, too short for surah %d at offset %d", len(lines), surah, offset)
 	}
@@ -312,8 +295,8 @@ func verify(ctx context.Context, db *mongo.Database, surah int) ([]ayahVerdict, 
 	if err != nil {
 		return nil, nil, fmt.Errorf("fetch primary source: %w", err)
 	}
-	if len(primary) != ayahCounts[surah-1] {
-		return nil, nil, fmt.Errorf("primary source returned %d ayahs, expected %d", len(primary), ayahCounts[surah-1])
+	if len(primary) != quran.AyahCount(surah) {
+		return nil, nil, fmt.Errorf("primary source returned %d ayahs, expected %d", len(primary), quran.AyahCount(surah))
 	}
 
 	col := db.Collection("ayahs")
@@ -462,7 +445,7 @@ func load(ctx context.Context, db *mongo.Database, surah int) error {
 	if err != nil {
 		return fmt.Errorf("fetch primary source: %w", err)
 	}
-	expected := ayahCounts[surah-1]
+	expected := quran.AyahCount(surah)
 	if len(primary) != expected {
 		return fmt.Errorf("primary source returned %d ayahs, expected %d — refusing to load a partial surah", len(primary), expected)
 	}

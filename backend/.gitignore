@@ -11,7 +11,9 @@
 # `go build ./cmd/<name>` drops a binary named after the package into this
 # directory, so every command under cmd/ needs its own entry. Build into bin/
 # instead (see AGENTS.md) to avoid adding one each time a command is added.
+/fetch_tafsir
 /ingest
+/register_source
 /seed_quran
 /validate_retrieval
 

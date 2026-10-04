@@ -10,6 +10,8 @@ import (
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 
+	"tadbor/backend/internal/quran"
+
 	"testing"
 )
 
@@ -149,26 +151,6 @@ func TestHashTextIsStableAndSensitive(t *testing.T) {
 	}
 }
 
-func TestAyahCountsCoverTheQuran(t *testing.T) {
-	if len(ayahCounts) != 114 {
-		t.Fatalf("expected 114 surahs, got %d", len(ayahCounts))
-	}
-	total := 0
-	for _, n := range ayahCounts {
-		if n <= 0 {
-			t.Fatal("every surah has at least one ayah")
-		}
-		total += n
-	}
-	// 6236 is the accepted count of ayahs in the Quran.
-	if total != 6236 {
-		t.Fatalf("ayah counts sum to %d, expected 6236", total)
-	}
-	if ayahCounts[11] != 111 {
-		t.Fatalf("Surah Yusuf must have 111 ayahs, got %d", ayahCounts[11])
-	}
-}
-
 // A cross-source that fails to download must not be read as "every ayah
 // disagrees". Comparing against a missing map entry yields an empty string,
 // which differs from every real text and would report 111 bogus differences
@@ -207,8 +189,8 @@ func TestVerifyMarksCrossCheckSkippedWhenSourcesUnavailable(t *testing.T) {
 		}
 		t.Fatalf("verify: %v", err)
 	}
-	if len(verdicts) != 111 {
-		t.Fatalf("got %d verdicts, want 111", len(verdicts))
+	if want := quran.AyahCount(12); len(verdicts) != want {
+		t.Fatalf("got %d verdicts, want %d", len(verdicts), want)
 	}
 	for _, v := range verdicts {
 		if !v.crossSkipped {
