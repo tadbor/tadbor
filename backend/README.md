@@ -24,6 +24,9 @@ microservices, at this stage).
 - `retrieval/` — exact verse mapping + brute-force cosine similarity fallback
 - `generation/` — the structured LLM contract (§15)
 - `review/` — reviewer queue and approve/reject/edit decisions
-- `ingestion/` — source registry (the actual ingestion batch job is a separate
-  script you run against this same MongoDB — see the top-level README)
+- `ingestion/` — source registry, chunking, verse mapping, and stored-vector
+  audit/repair (the batch jobs themselves are `cmd/` binaries run against this
+  same MongoDB — see the top-level README)
+- `embedding/` — the sentence-embedding provider client used by the offline
+  ingestion pipeline; tafsir only, never Quranic text (§5)
 - `platform/` — shared Mongo connection and auth middleware stub

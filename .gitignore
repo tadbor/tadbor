@@ -32,6 +32,7 @@ backend/main
 backend/api
 backend/build_manifest
 backend/check_coverage
+backend/embed_chunks
 backend/fetch_tafsir
 backend/ingest
 backend/register_source

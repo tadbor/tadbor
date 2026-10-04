@@ -143,6 +143,9 @@ automatically prove the other 92, only that they show a signal of quotation.
 
 ## Open items
 
+Embeddings for these 454 chunks are issue #6; see `docs/tafsir-embeddings.md`.
+`tafsir_chunks` is still empty in the real database either way, for the reason below.
+
 ### The source is still unverified, so this is not yet live
 
 `verification_status` on `ibn-kathir-ar` remains `unverified`, by design from

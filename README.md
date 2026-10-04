@@ -65,9 +65,13 @@ product, not just a running skeleton:
 
 - **Quran corpus:** `scripts/seed_quran.go` has 2 placeholder ayahs. Replace
   with your actual verified source (Phase 0/1 of the build guide).
-- **Tafsir ingestion:** no ingestion script exists yet — chunking, embedding,
-  and verse-mapping (Phase 2–3) still need to be written as a batch job
-  against this same MongoDB instance.
+- **Tafsir ingestion:** chunking, verse-mapping, and embedding are written
+  (`backend/cmd/build_manifest`, `ingest`, `check_coverage`, `embed_chunks`) and
+  verified against a throwaway probe database — see
+  `docs/tafsir-chunk-mapping.md` and `docs/tafsir-embeddings.md`. The real
+  database is still empty because the source itself is unverified: nobody has yet
+  confirmed the committed text is Ibn Kathir and not a paraphrase
+  (`docs/reviews/ibn-kathir-ar-surah-12.md`).
 - **Recitation audio:** `scripts/seed_recitation.go` loads 4 reciters
   (Alafasy, Abdul Basit, Al-Ghamdi, Al-Muaiqly) with placeholder audio URLs —
   see `docs/ADDENDUM-recitation-audio.md`. Replace with real per-ayah URLs
