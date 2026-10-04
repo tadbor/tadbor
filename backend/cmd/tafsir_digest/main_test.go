@@ -5,6 +5,8 @@ import (
 	"strings"
 	"testing"
 
+	"go.mongodb.org/mongo-driver/bson"
+
 	"tadbor/backend/internal/ingestion"
 	"tadbor/backend/internal/textverify"
 )
@@ -150,8 +152,8 @@ func TestRenderEntryCarriesEverythingAReviewerNeeds(t *testing.T) {
 		"قال تعالى hits the verse here", // the passage in full
 		"single_ayah",
 		"needs a human",
-		"- [ ] matches the printed edition",
-		"- [ ] differs",
+		"- [ ] faithful",
+		"- [ ] suspect",
 	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("sheet entry is missing %q:\n%s", want, out)
@@ -194,6 +196,13 @@ func TestHeaderOnlyCutsBeforeTheEntries(t *testing.T) {
 func TestHeaderNeverEmitsEmptyProvenance(t *testing.T) {
 	h := header{
 		sourceID: "s",
+		source: &ingestion.Source{
+			Title: "Tafsir Ibn Kathir",
+			Metadata: bson.M{
+				"digitisation":         "third-party API response, not a scan of a printing",
+				"upstream_resource_id": "14",
+			},
+		},
 		version: &ingestion.SourceVersion{
 			ID: "s-v1", Edition: "ed", ContentHash: "abc", RawTextRef: "corpus/x.md",
 		},
@@ -201,10 +210,46 @@ func TestHeaderNeverEmitsEmptyProvenance(t *testing.T) {
 		corpus: provenance{version: "v4", hash: "def"},
 	}
 	out := h.render()
-	for _, want := range []string{"s-v1", "abc", "corpus/x.md", "v4", "def"} {
+	for _, want := range []string{"s-v1", "abc", "corpus/x.md", "v4", "def",
+		"not a scan of a printing", "print edition used", "Reviewer:", "-tafsir-id 14"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("header is missing %q", want)
 		}
+	}
+}
+
+// This text is an API response, not a scan. A sheet that told a reviewer to
+// compare it against "the printed edition <website slug>" would be asking for a
+// circular check and implying a printing that does not exist.
+func TestHeaderDoesNotClaimTheWebEditionIsAPrintedOne(t *testing.T) {
+	out := header{
+		sourceID: "s",
+		source:   &ingestion.Source{Title: "T", Metadata: bson.M{"digitisation": "API response, not a scan"}},
+		version:  &ingestion.SourceVersion{Edition: "quran.com/ar-tafsir-ibn-kathir"},
+		surah:    12, total: 111, queue: 19, selected: 19, minRun: 4,
+	}.render()
+
+	if strings.Contains(out, "the printed edition `quran.com") {
+		t.Error("header still presents the web edition slug as a printed edition")
+	}
+	for _, want := range []string{"not a scan", "against a printing called", "print edition used for this review"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("header is missing the caveat %q", want)
+		}
+	}
+}
+
+// A source record with no metadata must still render, not panic: the caveat is
+// important but its absence is not a reason to fail the run.
+func TestHeaderRendersWithoutMetadata(t *testing.T) {
+	out := header{
+		sourceID: "s",
+		source:   &ingestion.Source{Title: "T"},
+		version:  &ingestion.SourceVersion{Edition: "ed", ID: "ed-1"},
+		surah:    1, total: 1, queue: 1, selected: 1, minRun: 4,
+	}.render()
+	if !strings.Contains(out, "T") {
+		t.Error("header did not render without metadata")
 	}
 }
 

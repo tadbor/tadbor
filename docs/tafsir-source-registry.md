@@ -186,3 +186,38 @@ both tools agree on what needs a human. They measure evidence, not correctness: 
 low score means "read this one", never "this one is wrong". Paraphrase is a
 legitimate way to write Tafsir, which is why a 19-entry sheet out of 111 is a
 plausible result rather than a suspicious one.
+
+### A gap this exposed: no print edition is pinned
+
+The registry's `metadata.digitisation` records that this text is a quran.com API
+response, "not a scan of a physical printing". Nothing in the repository ties that
+Arabic to any specific printing.
+
+That matters because "verify against the printed edition" is otherwise
+meaningless here. `quran.com/ar-tafsir-ibn-kathir` names a website and an API
+resource, not a book, so asking a reviewer to check the text against *that* would
+be a circular check against the same bytes the file was fetched from.
+
+What the machine can honestly establish is narrower than it first appears, and all
+of it passes:
+
+| established | check |
+|---|---|
+| the committed file is byte-identical to what quran.com serves | `cmd/fetch_tafsir -check` |
+| the manifest is a faithful parse of that file | `cmd/build_manifest -check` |
+| the registry's hash pins those exact bytes | `cmd/register_source -check` |
+| every ayah matches its stored hash and three independent sources | `cmd/seed_quran -check` |
+| all 111 ayahs are covered by a chunk mapping | `cmd/check_coverage` |
+
+What is left for a human splits into two judgements that are easy to conflate:
+
+- **Fidelity** — is this Arabic Ibn Kathir, rather than a paraphrase, an
+  abridgement, or a different mufassir? Needs a print edition to compare against.
+- **Attribution** — is each passage about the ayah it is keyed to? This is
+  `cmd/check_coverage`'s question, and it is a mapping judgement rather than a
+  transcription one.
+
+The review sheet asks for both and has a line to record which printing was used,
+because a verification that does not record its reference cannot be repeated by
+anyone else. Until a reviewer fills that in, `verification_status` should stay
+`unverified` and no live ingest should run.

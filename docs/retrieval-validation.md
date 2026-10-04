@@ -38,6 +38,12 @@ when its ayah range actually contains the requested ayah.
 > ingest is refused and retrieval filters every chunk out on
 > `source_verified`. The blocker is now human verification of the text, not
 > missing corpus or missing mapping.
+>
+> **The review sheet is `docs/reviews/ibn-kathir-ar-surah-12.md`** — 19 entries
+> of 111, each with the ayah, the full passage, and the hashes. Note that
+> verifying it needs a print edition of Ibn Kathir to compare against, and the
+> registry does not currently pin one; see the "gap this exposed" section of
+> `docs/tafsir-source-registry.md`.
 
 ## Per-ayah results
 
