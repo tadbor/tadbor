@@ -51,6 +51,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/joho/godotenv"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
@@ -520,9 +521,17 @@ func main() {
 	check := flag.Bool("check", false, "verify stored data against the sources and write nothing")
 	flag.Parse()
 
+	// .env is optional — `make seed` and docker-compose pass values directly. Note
+	// that godotenv reads ./.env only, and this repo's .env is at the root, so
+	// `make seed` sources it before getting here; loading here covers being run from
+	// the root, where ./.env is the right file.
+	if err := godotenv.Load(); err != nil && !os.IsNotExist(err) {
+		log.Printf("godotenv: %v", err)
+	}
+
 	uri := os.Getenv("MONGO_URI")
 	if uri == "" {
-		log.Fatal("set MONGO_URI first")
+		log.Fatal("MONGO_URI is not set (put it in .env, or export it)")
 	}
 	dbName := os.Getenv("MONGO_DB_NAME")
 	if dbName == "" {

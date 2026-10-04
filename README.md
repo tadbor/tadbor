@@ -14,25 +14,27 @@ See `docs/` for the full architecture:
 
 ```bash
 cp .env.example .env         # fill in LLM_API_KEY / EMBEDDING_API_KEY when you have them
-cd backend && go mod tidy && cd ..   # first time only — generates go.sum
-make up
+make dev
 ```
 
-This starts, in Docker:
-- **MongoDB** on `localhost:27017`
-- **Go backend** on `localhost:8080`
-- **Next.js web app** on `localhost:3000`
+`make dev` brings up MongoDB in Docker, then runs the Go API on `localhost:8080`
+and the Next.js reader on `localhost:3000` from source, so both reload on edit.
+Neither is containerized: only MongoDB is. Use `make up` if you want just the
+database and run the two servers yourself.
 
-Then, in a separate terminal, load the placeholder Quran data once:
+In another terminal, load the Quran corpus once:
 
 ```bash
 make seed
 ```
 
-Open `http://localhost:3000/surah/12` — you should see Surah Yusuf's first
-two (placeholder) ayahs. Explanations will be empty until you run the
-generation + review pipeline described in `docs/build-deploy-guide.md`
-Phases 2–6.
+Open `http://localhost:3000/surah/12` — you should see all 111 ayahs of Surah
+Yusuf. Explanations will be empty until you run the generation + review pipeline
+described in `docs/build-deploy-guide.md` Phases 2–6.
+
+`docs/local-stack-verification.md` is the full walkthrough: what `make dev`
+starts, how `make seed` and `make seed-check` differ, and what is still
+placeholder.
 
 ## Mobile
 
@@ -63,8 +65,10 @@ This scaffold gets you a working `docker compose up` with real request paths
 queue), but these still need real implementation before it's a working
 product, not just a running skeleton:
 
-- **Quran corpus:** `scripts/seed_quran.go` has 2 placeholder ayahs. Replace
-  with your actual verified source (Phase 0/1 of the build guide).
+- **Quran corpus:** loaded by `backend/cmd/seed_quran` and verified against
+  quran.com plus cross-check sources on every `make seed-check` — see
+  `docs/quran-corpus-validation.md`. All 111 ayahs of Surah Yusuf are real
+  Uthmani text.
 - **Tafsir ingestion:** chunking, verse-mapping, and embedding are written
   (`backend/cmd/build_manifest`, `ingest`, `check_coverage`, `embed_chunks`) and
   verified against a throwaway probe database — see
@@ -73,9 +77,10 @@ product, not just a running skeleton:
   confirmed the committed text is Ibn Kathir and not a paraphrase
   (`docs/reviews/ibn-kathir-ar-surah-12.md`).
 - **Recitation audio:** `scripts/seed_recitation.go` loads 4 reciters
-  (Alafasy, Abdul Basit, Al-Ghamdi, Al-Muaiqly) with placeholder audio URLs —
-  see `docs/ADDENDUM-recitation-audio.md`. Replace with real per-ayah URLs
-  from EveryAyah.com or a similar source before this plays real audio.
+  (Alafasy, Abdul Basit, Al-Ghamdi, Al-Muaiqly) but only ayahs 1–2, with
+  placeholder audio URLs — see `docs/ADDENDUM-recitation-audio.md`. Replace with
+  real per-ayah URLs from EveryAyah.com or a similar source before this plays
+  real audio (issue #14).
 - **Generation pipeline orchestration:** `internal/generation/service.go` can
   call an LLM, but nothing yet loops over ayahs and writes `explanations`
   documents — that's Phase 5's batch job.

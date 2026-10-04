@@ -1,10 +1,19 @@
 // Run once against MongoDB to load the 4 starter reciters and placeholder
-// recitation URLs for Surah Yusuf's first two ayahs (matching the placeholder
-// ayahs in seed_quran.go). Replace audio_url values with real EveryAyah.com /
-// quran.com CDN URLs before this is anything but a wiring test.
+// recitation URLs for Surah Yusuf's first two ayahs. Replace audio_url values with
+// real EveryAyah.com / quran.com CDN URLs before this is anything but a wiring test
+// (issue #14).
+//
+// The Quran text itself is NOT seeded here: that is backend/cmd/seed_quran, which
+// loads the verified Uthmani corpus for all 111 ayahs. This script only covers the
+// two ayahs it has placeholder audio for, which is why the surah page shows audio
+// controls on the first two verses and nowhere else.
+//
+// Reads .env like every backend command, though godotenv only looks at ./.env and
+// this repo's .env is at the root — `make seed` sources it before getting here.
 //
 // Usage:
-//   MONGO_URI="mongodb://tadbor:tadbor_dev_password@localhost:27017" go run scripts/seed_recitation.go
+//
+//	cd backend && go run ../scripts/seed_recitation.go
 package main
 
 import (
@@ -13,6 +22,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/joho/godotenv"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
@@ -31,9 +41,14 @@ type recitationSeed struct {
 }
 
 func main() {
+	// .env is optional — `make seed` and docker-compose pass values directly.
+	if err := godotenv.Load(); err != nil && !os.IsNotExist(err) {
+		log.Printf("godotenv: %v", err)
+	}
+
 	uri := os.Getenv("MONGO_URI")
 	if uri == "" {
-		log.Fatal("set MONGO_URI first")
+		log.Fatal("MONGO_URI is not set (put it in .env, or export it)")
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
