@@ -1,4 +1,4 @@
-.PHONY: up up-d down logs seed seed-check dev mobile mobile-web mobile-tunnel mobile-android api-tunnel
+.PHONY: up up-d down logs seed seed-check audio audio-check dev mobile mobile-web mobile-tunnel mobile-android api-tunnel
 
 # Starts MongoDB (the only Dockerized service) — backend + web are NOT in Docker.
 up:
@@ -51,6 +51,24 @@ seed:
 seed-check:
 	@set -a; [ -f .env ] && . ./.env; set +a; \
 	cd backend && go run ./cmd/seed_quran -surah 12 -check
+
+# Loads real per-ayah audio for all 111 ayahs x 4 reciters. NOT part of `make seed`:
+# it makes 444 HTTP requests to everyayah.com and takes ~2.5 minutes, which is not
+# something a `make seed` should quietly cost. The seed loads the reciters; this
+# checks every URL and writes the recitations (issue #14).
+#
+# -pace defaults to 250ms because everyayah.com is volunteer-run and serves a lot of
+# people. Do not lower it much.
+audio:
+	@set -a; [ -f .env ] && . ./.env; set +a; \
+	cd backend && go run ./cmd/ingest_recitations -live
+
+# Audits stored recitations without contacting any host: 444 present, no verse
+# missing, no placeholder URLs, no duplicates. Exits non-zero if not, so it works as
+# a gate rather than a report.
+audio-check:
+	@set -a; [ -f .env ] && . ./.env; set +a; \
+	cd backend && go run ./cmd/ingest_recitations -check
 
 # Mobile runs OUTSIDE Docker (Expo needs to talk to a device/simulator directly —
 # see mobile/README.md for why this isn't containerized).

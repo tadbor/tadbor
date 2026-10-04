@@ -80,14 +80,17 @@ product, not just a running skeleton:
   database is still empty because the source itself is unverified: nobody has yet
   confirmed the committed text is Ibn Kathir and not a paraphrase
   (`docs/reviews/ibn-kathir-ar-surah-12.md`).
-- **Recitation audio:** `scripts/seed_recitation.go` loads 4 reciters
-  (Alafasy, Abdul Basit, Al-Ghamdi, Al-Muaiqly) but only ayahs 1–2, with
-  placeholder audio URLs — see `docs/ADDENDUM-recitation-audio.md`. Replace with
-  real per-ayah URLs from EveryAyah.com or a similar source before this plays
-  real audio (issue #14).
+- **Recitation audio — loaded, one question open.** `make audio` writes all 444
+  per-ayah recitations (111 ayahs × Alafasy, Abdul Basit, Al-Ghamdi, Al-Muaiqly)
+  from EveryAyah.com, checking every URL before storing it, and `make
+  audio-check` fails if any verse is missing, duplicated or still a placeholder.
+  The surah page renders 111 playable `<audio>` elements. Unresolved: EveryAyah
+  publishes no licence and no per-reciter rights, so whether a public app may
+  hotlink these is a judgement call for a human, not something this repo decided
+  — see `docs/recitation-audio-sources.md`.
 - **Generation pipeline orchestration:** `internal/generation/service.go` can
-  call an LLM, but nothing yet loops over ayahs and writes `explanations`
-  documents — that's Phase 5's batch job.
+  call an LLM, verified against the live Gemini API, but nothing yet loops over
+  ayahs and writes `explanations` documents — that's issue #10's batch job.
 - **Reviewer auth:** `internal/platform/auth.go` gates everything under
   `/internal` with a shared `REVIEWER_PASSWORD`, and fails closed when that is
   unset. It is a shared secret, not an identity system — no per-reviewer

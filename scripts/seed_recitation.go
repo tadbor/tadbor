@@ -1,12 +1,16 @@
-// Run once against MongoDB to load the 4 starter reciters and placeholder
-// recitation URLs for Surah Yusuf's first two ayahs. Replace audio_url values with
-// real EveryAyah.com / quran.com CDN URLs before this is anything but a wiring test
-// (issue #14).
+// Loads the 4 reciters. Audio URLs are NOT seeded here — that is
+// backend/cmd/ingest_recitations (issue #14), which writes all 444 per-ayah
+// recitations from EveryAyah.com after checking every URL.
+//
+// This script used to write 8 placeholder recitations on example.com for ayahs
+// 1 and 2. They are gone, deliberately: `make seed` is the command a new clone
+// runs first, so a placeholder written here came straight back the moment anyone
+// re-seeded, overwriting real audio with example.com URLs that do not play. The
+// reciters are kept because they are reference data the ingestion command needs
+// to exist; the audio is not reference data and is verified per run.
 //
 // The Quran text itself is NOT seeded here: that is backend/cmd/seed_quran, which
-// loads the verified Uthmani corpus for all 111 ayahs. This script only covers the
-// two ayahs it has placeholder audio for, which is why the surah page shows audio
-// controls on the first two verses and nowhere else.
+// loads the verified Uthmani corpus for all 111 ayahs.
 //
 // Reads .env like every backend command, though godotenv only looks at ./.env and
 // this repo's .env is at the root — `make seed` sources it before getting here.
@@ -79,37 +83,5 @@ func main() {
 		log.Fatal(err)
 	}
 
-	// PLACEHOLDER URLs — replace with real per-ayah audio (e.g. EveryAyah.com
-	// or quran.com's audio CDN) before treating this as real data.
-	var recitationOps []mongo.WriteModel
-	for _, r := range reciters {
-		for ayah := 1; ayah <= 2; ayah++ {
-			rec := recitationSeed{
-				ReciterID:  r.ID,
-				SurahID:    12,
-				AyahNumber: ayah,
-				AudioURL:   "https://example.com/placeholder/" + r.ID + "/012" + itoa(ayah) + ".mp3",
-			}
-			recitationOps = append(recitationOps, mongo.NewUpdateOneModel().
-				SetFilter(bson.D{
-					{Key: "reciter_id", Value: r.ID},
-					{Key: "surah_id", Value: 12},
-					{Key: "ayah_number", Value: ayah},
-				}).
-				SetUpdate(bson.D{{Key: "$set", Value: rec}}).
-				SetUpsert(true))
-		}
-	}
-	if _, err := db.Collection("recitations").BulkWrite(ctx, recitationOps); err != nil {
-		log.Fatal(err)
-	}
-
-	log.Printf("upserted %d reciters and %d placeholder recitations\n", len(ops), len(recitationOps))
-}
-
-func itoa(n int) string {
-	if n < 10 {
-		return "00" + string(rune('0'+n))
-	}
-	return "0" + string(rune('0'+n))
+	log.Printf("upserted %d reciters; run backend/cmd/ingest_recitations -live to load audio URLs\n", len(ops))
 }
