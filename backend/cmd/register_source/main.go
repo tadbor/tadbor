@@ -262,8 +262,12 @@ func apply(ctx context.Context, db *mongo.Database, rec registryRecord, rawHash 
 		"source_id":     src.ID,
 		"edition":       rec.Version.Edition,
 		"version_label": rec.Version.VersionLabel,
-		"content_hash":  rawHash,
-		"created_at":    now,
+		// Recorded on the snapshot itself, not only on the source, because the
+		// hash identifies one set of bytes and must travel with wherever those
+		// bytes came from.
+		"raw_text_ref": rec.Version.RawTextRef,
+		"content_hash": rawHash,
+		"created_at":   now,
 	}
 	if _, err := db.Collection("source_versions").ReplaceOne(ctx,
 		bson.M{"_id": rec.Version.ID}, version,

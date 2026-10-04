@@ -154,3 +154,35 @@ even a preview.
 The text has not been compared against a printed edition of Ibn Kathir. Part 1 §7
 treats that as a human gate, not something to automate away, and it is why
 `verification_status` is `unverified` rather than `verified`.
+## Verifying a source against a printed edition
+
+Registration can check a licence and name an edition. It cannot tell you whether
+the text faithfully reproduces the edition it claims to be — that is a human
+judgement against paper, and nothing in the pipeline should pretend otherwise.
+
+`cmd/tafsir_digest` builds the evidence for that judgement:
+
+```
+cd backend
+go run ./cmd/tafsir_digest \
+  -source ibn-kathir-ar \
+  -manifest ../corpus/manifests/ibn-kathir-ar-surah-12.json \
+  -out ../docs/reviews/ibn-kathir-ar-surah-12.md
+```
+
+The sheet carries each passage in full next to the ayah it is keyed to, with the
+source and verse-corpus hashes, the snapshot id, and a checklist. It reads the
+committed manifest rather than the chunk collection, because a source has to be
+verifiable *before* it is ingested; that also lets the sheet reproduce the review
+queue without trusting a preview database.
+
+By default it contains only the entries no automatic signal could vouch for —
+19 of surah Yusuf's 111. `-all` emits everything, `-ayahs 1,34,43` a chosen few,
+and `-verify` prints just the provenance header so hashes can be checked before
+anyone spends time reading.
+
+The signals come from `internal/textverify`, shared with `cmd/check_coverage`, so
+both tools agree on what needs a human. They measure evidence, not correctness: a
+low score means "read this one", never "this one is wrong". Paraphrase is a
+legitimate way to write Tafsir, which is why a 19-entry sheet out of 111 is a
+plausible result rather than a suspicious one.

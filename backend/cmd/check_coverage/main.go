@@ -74,6 +74,7 @@ import (
 
 	"tadbor/backend/internal/ingestion"
 	"tadbor/backend/internal/quran"
+	"tadbor/backend/internal/textverify"
 )
 
 type ayahRow struct {
@@ -85,10 +86,10 @@ type ayahRow struct {
 	QuotedRun    int      `json:"quoted_run"`
 	// Introduced records the second corroborating signal: whether the passage
 	// opens the way a mufassir does before expounding a verse. See
-	// verseIntroducingPhrases.
+	// textverify.VerseIntroducingPhrases.
 	Introduced bool `json:"introduced"`
-	// Quoted is the fraction of the verse's 8-rune shingles that occur in the
-	// passage. See quoteCoverage.
+	// Quoted is the fraction of the verse's shingles that occur in the passage.
+	// See textverify.QuoteCoverage.
 	Quoted  float64 `json:"quoted"`
 	Verdict string  `json:"verdict"`
 	Text    string  `json:"verse_text,omitempty"`
@@ -223,17 +224,11 @@ func check(ctx context.Context, db *mongo.Database, sourceID string, surah, minR
 		rep.Covered++
 		row.Text = verseText[i]
 		row.Passage = preview(texts[i], 200)
-		row.QuotedRun = longestRun(verseText[i], texts[i])
-		row.Introduced = hasVerseIntroduction(texts[i])
-		row.Quoted = quoteCoverage(verseText[i], texts[i], shingleSize)
-		// Three independent signals; a mapping is flagged only when all three fail.
-		// Requiring unanimity keeps any one of them from deciding alone, because
-		// each has a known failure mode: a stock opening can precede a wide-ranging
-		// discussion, and word overlap happens by coincidence in a short verse.
-		row.Verdict = "mapped-corroborated"
-		if row.QuotedRun < minRun && !row.Introduced && row.Quoted < quotedThreshold {
-			row.Verdict = "mapped-uncorroborated"
-		}
+		score := textverify.ScorePassage(verseText[i], texts[i])
+		row.QuotedRun = score.LongestRun
+		row.Introduced = score.Introduced
+		row.Quoted = score.QuoteCoverage
+		row.Verdict = verdict(score, minRun)
 		if cov.Usable == 0 {
 			rep.Unusable = append(rep.Unusable, i)
 		}
@@ -285,26 +280,18 @@ func passageText(ctx context.Context, db *mongo.Database, sourceID, version stri
 //
 // Both sides are normalised here rather than by the caller, so the function is
 // correct by construction and cannot silently score zero on orthography.
-func longestRun(verse, passage string) int {
-	verse = matchForm(verse)
-	passage = matchForm(passage)
-
-	words := strings.Fields(verse)
-	if len(words) == 0 || passage == "" {
-		return 0
+// verdict labels a mapping on the evidence available for it. An entry is
+// corroborated when any one signal fires.
+//
+// Requiring unanimity to declare an entry suspect keeps any single signal from
+// deciding alone, because each has a known failure mode: a stock opening can
+// precede a wide-ranging discussion, and word overlap happens by coincidence in a
+// short verse.
+func verdict(score textverify.Score, minRun int) string {
+	if score.LongestRun >= minRun || score.Introduced || score.Quoted {
+		return "mapped-corroborated"
 	}
-	best := 0
-	for i := range words {
-		for j := i + 1; j <= len(words); j++ {
-			if !strings.Contains(passage, strings.Join(words[i:j], " ")) {
-				break
-			}
-			if j-i > best {
-				best = j - i
-			}
-		}
-	}
-	return best
+	return "mapped-uncorroborated"
 }
 
 func printReport(rep report, onlyFlagged bool) {
@@ -358,7 +345,7 @@ func printReport(rep report, onlyFlagged bool) {
 	}
 	fmt.Printf("\nneeds a human read (%d ayahs no signal could corroborate):\n", len(queue))
 	fmt.Printf("  no signal agreed: fewer than %d consecutive quoted words, no verse-introducing\n", rep.MinRun)
-	fmt.Printf("  phrase, and less than %.0f%% of the verse present\n", quotedThreshold*100)
+	fmt.Printf("  phrase, and less than %.0f%% of the verse present\n", textverify.QuotedThreshold*100)
 	if !onlyFlagged {
 		fmt.Printf("  (use -only-flagged to list them with the verse and passage)\n")
 		return
@@ -374,120 +361,7 @@ func printReport(rep report, onlyFlagged bool) {
 	}
 }
 
-// shingleSize is the rune length of the n-grams quoteCoverage counts.
-const shingleSize = 8
-
-// quotedThreshold is the share of a verse's shingles that must appear in a
-// passage before the mapping counts as corroborated by quotation.
-//
-// Half is chosen because it is a plain "mostly quoted" reading rather than a
-// value tuned to make the queue look short. On Surah Yusuf the median entry scores
-// 0.59, and the entries below 0.2 are the ones that genuinely paraphrase instead
-// of quoting — which is a real and expected feature of this mufassir, not a
-// mapping fault.
-const quotedThreshold = 0.5
-
-// quoteCoverage returns the fraction of the verse's k-rune shingles that also occur
-// in the passage.
-//
-// longestRun needs the quotation's words to match exactly, and Ibn Kathir's do not:
-// he writes "إنا أنزلناه قرآنا عربيا" where the ayah reads "إنا أنزلناه قرآنا عربيا"
-// with its Uthmani spellings — inserted or dropped alifs and hamza seats break
-// every exact word match, so a passage that quotes a verse nearly verbatim scores
-// close to zero. Counting shared n-grams is robust to those differences while still
-// collapsing when the passage merely paraphrases.
-func quoteCoverage(verse, passage string, k int) float64 {
-	v := []rune(matchForm(verse))
-	p := []rune(matchForm(passage))
-	if len(p) == 0 || len(v) == 0 {
-		return 0
-	}
-	if len(v) < k {
-		if strings.Contains(passage, verse) {
-			return 1
-		}
-		return 0
-	}
-
-	passageShingles := make(map[string]struct{}, len(p))
-	for i := 0; i+k <= len(p); i++ {
-		passageShingles[string(p[i:i+k])] = struct{}{}
-	}
-
-	total := len(v) - k + 1
-	if total <= 0 {
-		return 0
-	}
-	hit := 0
-	for i := 0; i+k <= len(v); i++ {
-		if _, ok := passageShingles[string(v[i:i+k])]; ok {
-			hit++
-		}
-	}
-	return float64(hit) / float64(total)
-}
-
-// verseIntroducingPhrases are the stock openings Ibn Kathir uses before expounding
-// a verse ("He informs, may He be exalted, that..."). They are a second,
-// independent signal that a passage is expounding the verse it is keyed to.
-//
-// It covers only part of the corpus — 36 of surah Yusuf's 111 entries — because
-// the phrasing varies with context. That is why it corroborates the quotation
-// check instead of replacing it.
-var verseIntroducingPhrases = []string{
-	"يخبر تعالى",
-	"يقول تعالى",
-	"قال تعالى",
-}
-
-// hasVerseIntroduction reports whether the passage contains one of the stock
-// verse-introducing phrases.
-func hasVerseIntroduction(passage string) bool {
-	flat := matchForm(passage)
-	for _, p := range verseIntroducingPhrases {
-		if strings.Contains(flat, matchForm(p)) {
-			return true
-		}
-	}
-	return false
-}
-
-// matchForm reduces text for quotation matching only.
-//
-// It layers orthography folding on top of LexicalForm because the two sides of
-// this comparison are written by different hands: ayahs are Uthmani, while Ibn
-// Kathir quotes them in his own orthography. In practice that means Qur'anic
-// quotations appear without hamza ("اباه" for "أَبَاهُ") and with final ya and
-// ta-marbuta spelled plainly, so a diacritics-only comparison scores zero for a
-// mapping that is plainly correct — and scores it zero silently.
-//
-// This is a matching key and nothing else. LexicalForm is kept reversible and
-// the stored text is never folded: hamza and ya/alef-maqsura are meaning-bearing
-// in Qur'anic text, so this must never reach the chunk text, the embedding, or
-// anything a reader sees. Same reasoning as Part 1 §7's rule about diacritics.
-func matchForm(s string) string {
-	folded := strings.Map(func(r rune) rune {
-		switch r {
-		case 'أ', 'إ', 'آ', 'ٱ': // أ إ آ ٱ
-			return 'ا'
-		case 'ؤ': // ؤ
-			return 'و'
-		case 'ئ': // ئ
-			return 'ي'
-		case 'ى': // ى
-			return 'ي'
-		case 'ة': // ة
-			return 'ه'
-		case 'ء': // ء
-			return -1
-		case 0x0654: // ؔ combining hamza above
-			return -1
-		}
-		return r
-	}, ingestion.NewNormalizer().LexicalForm(s))
-	return strings.TrimSpace(folded)
-}
-
+// textverify.ShingleSize is the rune length of the n-grams quoteCoverage counts.
 // preview truncates on a rune boundary, never mid-character.
 func preview(s string, limit int) string {
 	r := []rune(strings.TrimSpace(s))
