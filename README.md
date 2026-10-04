@@ -32,6 +32,10 @@ Open `http://localhost:3000/surah/12` — you should see all 111 ayahs of Surah
 Yusuf. Explanations will be empty until you run the generation + review pipeline
 described in `docs/build-deploy-guide.md` Phases 2–6.
 
+`http://localhost:3000/admin` is the reviewer dashboard, where explanations get
+approved before anyone can read them. It needs `REVIEWER_PASSWORD` in `.env` and
+stays closed without it.
+
 `docs/local-stack-verification.md` is the full walkthrough: what `make dev`
 starts, how `make seed` and `make seed-check` differ, and what is still
 placeholder.
@@ -84,7 +88,13 @@ product, not just a running skeleton:
 - **Generation pipeline orchestration:** `internal/generation/service.go` can
   call an LLM, but nothing yet loops over ayahs and writes `explanations`
   documents — that's Phase 5's batch job.
-- **Reviewer auth:** `internal/platform/auth.go` is a no-op — required
-  before deploying past localhost.
-- **Admin dashboard UI:** the `review` API endpoints exist; no frontend for
-  them yet (could live in `web/app/admin/` or its own app).
+- **Reviewer auth:** `internal/platform/auth.go` gates everything under
+  `/internal` with a shared `REVIEWER_PASSWORD`, and fails closed when that is
+  unset. It is a shared secret, not an identity system — no per-reviewer
+  identity, expiry, or revocation. See `docs/reviewer-dashboard.md` for when
+  that stops being enough.
+- **Reviewer dashboard:** `web/app/admin/` lists pending explanations with the
+  verse, the resolved evidence, and the citation, and supports Approve /
+  Edit & Approve / Reject / Escalate against the §20 checklist — see
+  `docs/reviewer-dashboard.md`. Its queue stays empty until the generation batch
+  below exists.

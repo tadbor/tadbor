@@ -15,11 +15,19 @@ logs:
 # One command: MongoDB (Docker) + Go backend (:8080) + Next.js web (:3000),
 # all in the foreground — Ctrl+C stops everything. Mobile is separate: make mobile.
 #
+# Both servers need .env (LLM/embedding keys, and REVIEWER_PASSWORD for the
+# reviewer dashboard), and Next.js only reads web/.env* while the Go commands
+# only read ./.env from their own directory — so it is sourced here and handed to
+# both. MONGO_URI falls back to the docker-compose credentials for a first run
+# before .env exists.
+#
 # The web app needs no API URL of its own: web/next.config.js falls back to
 # http://localhost:8080.
 dev:
+	@set -a; [ -f .env ] && . ./.env; set +a; \
+	export MONGO_URI="$${MONGO_URI:-mongodb://tadbor:tadbor_dev_password@localhost:27017}"; \
 	docker compose up -d && \
-	MONGO_URI="mongodb://tadbor:tadbor_dev_password@localhost:27017" go run -C backend ./cmd/api & \
+	go run -C backend ./cmd/api & \
 	npm --prefix web run dev & \
 	wait
 

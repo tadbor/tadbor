@@ -63,9 +63,12 @@ func main() {
 		log.Printf("EMBEDDING_API_URL/EMBEDDING_API_KEY not set: retrieval will use exact verse mapping only")
 	}
 
-	// Internal services are mounted under a group so reviewer auth can gate
-	// them as a unit once platform.ReviewerAuthMiddleware stops being a stub.
-	internal := router.Group("", platform.ReviewerAuthMiddleware())
+	// Internal services are mounted under /internal so reviewer auth gates them as
+	// a unit: /internal/retrieval and /internal/review are the review pipeline's
+	// back door, and neither is meant to be reachable without the reviewer
+	// password. An unset REVIEWER_PASSWORD closes this group rather than
+	// leaving it open — see platform.ReviewerAuthMiddleware.
+	internal := router.Group("/internal", platform.ReviewerAuthMiddleware(os.Getenv("REVIEWER_PASSWORD")))
 	retrieval.RegisterRoutes(internal, retrieval.NewService(db, embedder))
 	review.RegisterRoutes(internal, review.NewService(db))
 

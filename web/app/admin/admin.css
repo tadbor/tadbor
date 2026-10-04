@@ -1,0 +1,277 @@
+/* Reviewer dashboard. Same light theme tokens as landing.css, kept separate
+   because nothing here ships to readers. */
+
+.wrap {
+    max-width: 860px;
+    margin: 0 auto;
+    padding: 2rem 1.25rem 6rem;
+    color: #151515;
+}
+.wrap-narrow {
+    max-width: 420px;
+}
+
+h1 {
+    font-size: 1.6rem;
+    margin: 0 0 0.25rem;
+}
+h2 {
+    font-size: 1.15rem;
+    margin: 0;
+}
+h3 {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: #6b6b6b;
+    margin: 0 0 0.5rem;
+}
+
+.sub {
+    color: #6b6b6b;
+    margin: 0;
+}
+
+.top {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+}
+.top-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+}
+.who {
+    font-size: 0.8rem;
+    color: #6b6b6b;
+}
+
+.banner {
+    border: 1px solid rgba(21, 21, 21, 0.15);
+    border-left-width: 4px;
+    border-radius: 6px;
+    padding: 0.75rem 1rem;
+    margin: 1rem 0;
+    font-size: 0.9rem;
+    line-height: 1.5;
+}
+.banner p {
+    margin: 0.4rem 0 0;
+}
+.banner-ok {
+    border-left-color: #1a7f37;
+    background: #f2fbf4;
+}
+.banner-error {
+    border-left-color: #b42318;
+    background: #fdf3f2;
+}
+.banner-block {
+    border-left-color: #b54708;
+    background: #fffaeb;
+}
+
+.card {
+    border: 1px solid rgba(21, 21, 21, 0.15);
+    border-radius: 10px;
+    padding: 1.25rem;
+    margin-bottom: 1.5rem;
+}
+.card-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+.id {
+    font-size: 0.7rem;
+    color: #6b6b6b;
+    word-break: break-all;
+}
+
+.tag {
+    font-size: 0.7rem;
+    font-weight: 600;
+    background: #f7f7f7;
+    border: 1px solid rgba(21, 21, 21, 0.1);
+    border-radius: 999px;
+    padding: 0.1rem 0.55rem;
+    vertical-align: middle;
+}
+.count {
+    font-size: 0.7rem;
+    color: #6b6b6b;
+}
+
+.panel {
+    border-top: 1px solid rgba(21, 21, 21, 0.1);
+    margin-top: 1rem;
+    padding-top: 1rem;
+}
+
+/* The verse and the explanation are visually distinct on purpose: the reviewer's
+   job includes confirming the explanation never passes itself off as scripture. */
+.arabic {
+    font-family: 'Amiri Quran', 'Amiri', serif;
+    font-size: 1.3rem;
+    line-height: 2;
+    text-align: right;
+    margin: 0;
+}
+.proposed {
+    font-size: 1.1rem;
+    line-height: 1.9;
+    text-align: right;
+    margin: 0;
+    background: #f7f7f7;
+    border: 1px solid rgba(21, 21, 21, 0.08);
+    border-radius: 8px;
+    padding: 0.85rem 1rem;
+}
+
+.meta {
+    font-size: 0.75rem;
+    color: #6b6b6b;
+    margin: 0.5rem 0 0;
+}
+
+.citation {
+    font-size: 0.9rem;
+    margin: 0 0 0.75rem;
+}
+
+.missing {
+    color: #b42318;
+    font-size: 0.85rem;
+    margin: 0.5rem 0 0;
+}
+
+.chunk {
+    border: 1px solid rgba(21, 21, 21, 0.1);
+    border-radius: 8px;
+    padding: 0.5rem 0.75rem;
+    margin-bottom: 0.5rem;
+    background: #fcfcfc;
+}
+.chunk summary {
+    cursor: pointer;
+    font-size: 0.8rem;
+    color: #6b6b6b;
+}
+.chunk p[dir='rtl'] {
+    font-family: 'Amiri Quran', 'Amiri', serif;
+    font-size: 1.05rem;
+    line-height: 1.9;
+    text-align: right;
+    margin: 0.6rem 0 0;
+}
+
+.decide {
+    border-top: 2px solid rgba(21, 21, 21, 0.12);
+    margin-top: 1.25rem;
+    padding-top: 1.25rem;
+}
+fieldset {
+    border: 1px solid rgba(21, 21, 21, 0.12);
+    border-radius: 8px;
+    padding: 0.75rem 1rem 1rem;
+    margin: 0 0 1rem;
+}
+legend {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: #6b6b6b;
+    padding: 0 0.4rem;
+}
+.check {
+    display: flex;
+    gap: 0.6rem;
+    align-items: flex-start;
+    font-size: 0.9rem;
+    line-height: 1.5;
+    margin-bottom: 0.5rem;
+    cursor: pointer;
+}
+.check input {
+    margin-top: 0.25rem;
+}
+
+.field {
+    display: block;
+    margin-bottom: 1rem;
+}
+.field span {
+    display: block;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: #6b6b6b;
+    margin-bottom: 0.35rem;
+}
+.field input,
+.field textarea {
+    width: 100%;
+    box-sizing: border-box;
+    font: inherit;
+    font-size: 0.95rem;
+    padding: 0.55rem 0.7rem;
+    border: 1px solid rgba(21, 21, 21, 0.2);
+    border-radius: 6px;
+    background: #fff;
+}
+.field textarea {
+    resize: vertical;
+}
+
+.actions {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+.btn {
+    font: inherit;
+    font-size: 0.85rem;
+    font-weight: 600;
+    padding: 0.55rem 0.9rem;
+    border-radius: 8px;
+    border: 1px solid rgba(21, 21, 21, 0.2);
+    background: #fff;
+    color: #151515;
+    cursor: pointer;
+}
+.btn-approve {
+    background: #1a7f37;
+    border-color: #1a7f37;
+    color: #fff;
+}
+.btn-edit {
+    background: #1f6feb;
+    border-color: #1f6feb;
+    color: #fff;
+}
+.btn-reject {
+    background: #b42318;
+    border-color: #b42318;
+    color: #fff;
+}
+.btn-quiet {
+    color: #6b6b6b;
+}
+
+.login {
+    border: 1px solid rgba(21, 21, 21, 0.15);
+    border-radius: 10px;
+    padding: 1.25rem;
+    margin: 1.5rem 0;
+}
+
+.empty {
+    color: #6b6b6b;
+    font-size: 0.9rem;
+    line-height: 1.6;
+}
