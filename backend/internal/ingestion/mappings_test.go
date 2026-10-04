@@ -540,3 +540,151 @@ func mappingCount(t *testing.T, db *mongo.Database) int64 {
 	}
 	return n
 }
+
+// A source with no registered snapshot must be refused. Falling back to Edition is
+// the bug this replaced: Edition names an edition, so nothing would record which
+// bytes were actually ingested.
+func TestIngestRefusesASourceWithNoPinnedVersion(t *testing.T) {
+	db := testDB(t)
+	ctx := context.Background()
+	seedSourceWithoutVersion(t, db, usableSource())
+
+	_, err := NewService(db, &fakeEmbedder{}).IngestSource(ctx, "tabari-yusuf",
+		[]Document{ingestDoc("نص")}, IngestOptions{})
+
+	if !errors.Is(err, ErrNoPinnedVersion) {
+		t.Fatalf("got %v, want ErrNoPinnedVersion", err)
+	}
+	if len(storedChunks(t, db)) != 0 {
+		t.Error("a refused ingest wrote chunks")
+	}
+}
+
+// Two snapshots and no pointer is genuinely ambiguous, so guessing would ingest
+// the wrong text.
+func TestIngestRefusesAnAmbiguousSnapshot(t *testing.T) {
+	db := testDB(t)
+	ctx := context.Background()
+	src := usableSource()
+	seedSourceWithoutVersion(t, db, src)
+	if _, err := db.Collection("source_versions").InsertMany(ctx, []any{
+		SourceVersion{ID: "v-1", SourceID: src.ID, Edition: src.Edition, ContentHash: "h1"},
+		SourceVersion{ID: "v-2", SourceID: src.ID, Edition: src.Edition, ContentHash: "h2"},
+	}); err != nil {
+		t.Fatalf("seed two versions: %v", err)
+	}
+
+	_, err := NewService(db, &fakeEmbedder{}).IngestSource(ctx, "tabari-yusuf",
+		[]Document{ingestDoc("نص")}, IngestOptions{})
+
+	if err == nil || !strings.Contains(err.Error(), "refusing to guess") {
+		t.Fatalf("got %v, want a refusal to choose between snapshots", err)
+	}
+}
+
+// current_version makes the choice explicit, and must win over "only one exists".
+func TestVersionFollowsTheCurrentVersionPointer(t *testing.T) {
+	db := testDB(t)
+	ctx := context.Background()
+	src := usableSource()
+	src.CurrentVersion = "v-old"
+	seedSourceWithoutVersion(t, db, src)
+	if _, err := db.Collection("source_versions").InsertMany(ctx, []any{
+		SourceVersion{ID: "v-old", SourceID: src.ID, Edition: src.Edition, ContentHash: "h-old"},
+		SourceVersion{ID: "v-new", SourceID: src.ID, Edition: src.Edition, ContentHash: "h-new"},
+	}); err != nil {
+		t.Fatalf("seed versions: %v", err)
+	}
+
+	got, err := NewSourceRegistry(db).Version(ctx, src.ID)
+	if err != nil {
+		t.Fatalf("Version: %v", err)
+	}
+	if got.ID != "v-old" {
+		t.Errorf("Version = %q, want v-old — the pointer is authoritative", got.ID)
+	}
+}
+
+// A version with no hash is not pinned, so it must not be treated as one.
+func TestVersionRefusesAnUnpinnedSnapshot(t *testing.T) {
+	db := testDB(t)
+	ctx := context.Background()
+	src := usableSource()
+	src.CurrentVersion = "v-nohash"
+	seedSourceWithoutVersion(t, db, src)
+	if _, err := db.Collection("source_versions").InsertOne(ctx,
+		SourceVersion{ID: "v-nohash", SourceID: src.ID, Edition: src.Edition}); err != nil {
+		t.Fatalf("seed version: %v", err)
+	}
+
+	if _, err := NewSourceRegistry(db).Version(ctx, src.ID); err == nil {
+		t.Fatal("Version accepted a source_versions document with no content_hash")
+	}
+}
+
+// Two snapshots of one edition must not collide: this is the whole point of
+// keying chunks by version id instead of edition.
+func TestTwoSnapshotsOfOneEditionProduceDistinctChunks(t *testing.T) {
+	db := testDB(t)
+	ctx := context.Background()
+	src := usableSource()
+	svc := NewService(db, &fakeEmbedder{})
+
+	inFirst := func() {
+		src.CurrentVersion = "v-first"
+		seedSourceWithoutVersion(t, db, src)
+		if _, err := db.Collection("source_versions").InsertOne(ctx,
+			SourceVersion{ID: "v-first", SourceID: src.ID, Edition: src.Edition, ContentHash: "h1"}); err != nil {
+			t.Fatalf("seed v-first: %v", err)
+		}
+		if _, err := svc.IngestSource(ctx, "tabari-yusuf", []Document{ingestDoc("نص")}, IngestOptions{}); err != nil {
+			t.Fatalf("ingest v-first: %v", err)
+		}
+	}
+	inFirst()
+
+	// Repoint at a corrected re-digitisation of the same edition.
+	if _, err := db.Collection("sources").UpdateOne(ctx, bson.M{"_id": src.ID},
+		bson.M{"$set": bson.M{"current_version": "v-second"}}); err != nil {
+		t.Fatalf("repoint: %v", err)
+	}
+	if _, err := db.Collection("source_versions").InsertOne(ctx,
+		SourceVersion{ID: "v-second", SourceID: src.ID, Edition: src.Edition, ContentHash: "h2"}); err != nil {
+		t.Fatalf("seed v-second: %v", err)
+	}
+	if _, err := svc.IngestSource(ctx, "tabari-yusuf", []Document{ingestDoc("نص")}, IngestOptions{}); err != nil {
+		t.Fatalf("ingest v-second: %v", err)
+	}
+
+	chunks := storedChunks(t, db)
+	if len(chunks) != 2 {
+		t.Fatalf("stored %d chunks, want 2 — keying by edition would have overwritten the first snapshot", len(chunks))
+	}
+	seen := map[string]string{}
+	for _, c := range chunks {
+		seen[c.SourceVersion] = c.SourceVersionHash
+		if c.SourceVersion == c.ID {
+			t.Error("chunk id should be derived from the version id, not be identical to it")
+		}
+	}
+	if seen["v-first"] != "h1" || seen["v-second"] != "h2" {
+		t.Errorf("snapshot hashes = %v, want v-first->h1 and v-second->h2", seen)
+	}
+}
+
+// The registry's edition and its version's edition must describe the same thing.
+func TestVersionRefusesAPointerToAnotherSourcesSnapshot(t *testing.T) {
+	db := testDB(t)
+	ctx := context.Background()
+	src := usableSource()
+	src.CurrentVersion = "someone-elses-version"
+	seedSourceWithoutVersion(t, db, src)
+	if _, err := db.Collection("source_versions").InsertOne(ctx,
+		SourceVersion{ID: "someone-elses-version", SourceID: "other", ContentHash: "h"}); err != nil {
+		t.Fatalf("seed version: %v", err)
+	}
+
+	if _, err := NewSourceRegistry(db).Version(ctx, src.ID); err == nil {
+		t.Fatal("Version followed a pointer to another source's snapshot")
+	}
+}

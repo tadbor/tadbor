@@ -124,6 +124,19 @@ record: blocked as registered, usable once verification alone is flipped —
 which also proves the record carries every other field the gate reads — and
 blocked again if licensing is withdrawn.
 
+### `current_version` is what ingestion keys on
+
+`sources.current_version` names the `source_versions` document this source's
+content should be ingested as, and every chunk carries that document's
+`content_hash` as `source_version_hash`. Registering a version record sets the
+pointer, so the snapshot being ingested is always explicit.
+
+This replaced an earlier behaviour where chunks were keyed by `sources.edition`.
+An edition is not a snapshot: two digitisations of one edition would have shared
+one `source_version` and overwritten each other, with the hash that actually pins
+the text never reaching the chunks. A source with two registered versions and no
+pointer is now refused rather than guessed at.
+
 `tafsir_chunks` is empty and `ingestion_status` is `not_started` in the real
 `tadbor` database. Ingestion was issue #5 and has been carried out against a
 throwaway probe database: 111 of 111 ayahs mapped, 454 chunks, no drift. Nothing

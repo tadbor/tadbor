@@ -38,6 +38,10 @@ func (f *fakeEmbedder) total() int {
 
 func ingestDoc(texts ...string) Document {
 	d := doc()
+	// Left empty on purpose: the service resolves the pinned source_versions id,
+	// and a test document that named a version itself would be testing the
+	// manifest's plumbing instead of the pipeline.
+	d.SourceVersion = ""
 	for i, txt := range texts {
 		d.Sections = append(d.Sections, singleAyah(i, i+1, txt))
 	}
@@ -141,8 +145,8 @@ func TestIngestWritesChunksAndRecordsProvenance(t *testing.T) {
 	if rep.TotalChunks != 2 || rep.Embedded != 2 || rep.Written != 2 || rep.EmbedCalls != 1 {
 		t.Fatalf("unexpected report: %+v", rep)
 	}
-	if rep.SourceVersion != "dar-1410" {
-		t.Fatalf("source_version = %q", rep.SourceVersion)
+	if rep.SourceVersion != "tabari-yusuf-dar-1410" {
+		t.Fatalf("source_version = %q, want the pinned source_versions id", rep.SourceVersion)
 	}
 
 	stored := storedChunks(t, db)
@@ -345,6 +349,7 @@ func TestIngestBatchesByConfiguredSize(t *testing.T) {
 		sections = append(sections, singleAyah(i-1, i, "نص "+string(rune('أ'+i-1))))
 	}
 	d := doc(sections...)
+	d.SourceVersion = ""
 
 	emb := &fakeEmbedder{}
 	rep, err := newTestService(t, db, emb).IngestSource(context.Background(), "tabari-yusuf",
@@ -454,12 +459,12 @@ func TestIngestRefusesAMixedEditionManifest(t *testing.T) {
 
 	second := ingestDoc("نص")
 	second.ID = "doc-2"
-	second.SourceVersion = "dar-1400"
+	second.SourceVersion = "tabari-yusuf-dar-1400"
 
 	_, err := newTestService(t, db, &fakeEmbedder{}).IngestSource(context.Background(), "tabari-yusuf",
 		[]Document{ingestDoc("نص"), second}, IngestOptions{})
-	if err == nil || !strings.Contains(err.Error(), "one edition at a time") {
-		t.Fatalf("expected a mixed-edition rejection, got %v", err)
+	if err == nil || !strings.Contains(err.Error(), "re-ingest one snapshot at a time") {
+		t.Fatalf("expected a mixed-snapshot rejection, got %v", err)
 	}
 }
 
@@ -476,8 +481,13 @@ func TestIngestFillsDocumentMetadataFromTheSource(t *testing.T) {
 	}
 
 	got := storedChunks(t, db)[0]
-	if got.SourceVersion != src.Edition {
-		t.Fatalf("source_version = %q, want the source edition %q", got.SourceVersion, src.Edition)
+	// Not the edition: the pinned snapshot id, with the hash carried through so a
+	// stored chunk can be traced back to the exact bytes it came from.
+	if got.SourceVersion != "tabari-yusuf-dar-1410" {
+		t.Fatalf("source_version = %q, want the pinned source_versions id", got.SourceVersion)
+	}
+	if got.SourceVersionHash == "" {
+		t.Error("source_version_hash is empty; the chunk is not tied to a pinned snapshot")
 	}
 	if got.Language != src.Language || got.ContentType != ContentTypeTafsir {
 		t.Fatalf("metadata not filled from the source: %q / %q", got.Language, got.ContentType)
@@ -538,6 +548,7 @@ func TestIngestedChunksAreRetrievableByExactVerse(t *testing.T) {
 	// The third section is thematic: it must stay out of exact-verse results.
 	d.Sections[2].MappingType = MappingThematic
 	d.Sections[2].AyahStart, d.Sections[2].AyahEnd = 0, 0
+	d.SourceVersion = ""
 
 	if _, err := newTestService(t, db, &fakeEmbedder{}).IngestSource(context.Background(), "tabari-yusuf",
 		[]Document{d}, IngestOptions{}); err != nil {
@@ -598,7 +609,7 @@ func TestRevokedSourceDropsOutOfRetrieval(t *testing.T) {
 	svc := newTestService(t, db, &fakeEmbedder{})
 
 	if _, err := svc.IngestSource(context.Background(), "tabari-yusuf",
-		[]Document{doc(singleAyah(0, 1, "تفسير الآية الأولى"))}, IngestOptions{}); err != nil {
+		[]Document{ingestDoc("تفسير الآية الأولى")}, IngestOptions{}); err != nil {
 		t.Fatalf("IngestSource: %v", err)
 	}
 

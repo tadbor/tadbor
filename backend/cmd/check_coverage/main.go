@@ -97,6 +97,7 @@ type ayahRow struct {
 
 type report struct {
 	Source    string                  `json:"source"`
+	Version   string                  `json:"source_version"`
 	Surah     int                     `json:"surah"`
 	AyahCount int                     `json:"ayah_count"`
 	Covered   int                     `json:"covered"`
@@ -173,13 +174,17 @@ func check(ctx context.Context, db *mongo.Database, sourceID string, surah, minR
 		return report{}, fmt.Errorf("coverage: %w", err)
 	}
 
-	src, err := ingestion.NewSourceRegistry(db).Get(ctx, sourceID)
+	registry := ingestion.NewSourceRegistry(db)
+	// Chunks are keyed by the pinned snapshot's id, so the version must be
+	// resolved the same way ingestion resolves it — reading Edition here would
+	// silently match nothing.
+	version, err := registry.Version(ctx, sourceID)
 	if err != nil {
-		return report{}, fmt.Errorf("load source: %w", err)
+		return report{}, fmt.Errorf("resolve pinned source version: %w", err)
 	}
 
 	// Passage text, joined per ayah, is what the quotation check searches.
-	texts, err := passageText(ctx, db, sourceID, src.Edition, surah, count)
+	texts, err := passageText(ctx, db, sourceID, version.ID, surah, count)
 	if err != nil {
 		return report{}, err
 	}
@@ -193,7 +198,7 @@ func check(ctx context.Context, db *mongo.Database, sourceID string, surah, minR
 		verseText[a.AyahNumber] = a.TextSimple
 	}
 
-	rep := report{Source: sourceID, Surah: surah, AyahCount: count, MinRun: minRun}
+	rep := report{Source: sourceID, Version: version.ID, Surah: surah, AyahCount: count, MinRun: minRun}
 
 	for i := 1; i <= count; i++ {
 		cov := coverage[i]
@@ -235,7 +240,7 @@ func check(ctx context.Context, db *mongo.Database, sourceID string, surah, minR
 		rep.Rows = append(rep.Rows, row)
 	}
 
-	drift, err := store.VerifyMappingsConsistent(ctx, sourceID, src.Edition)
+	drift, err := store.VerifyMappingsConsistent(ctx, sourceID, version.ID)
 	if err != nil {
 		return report{}, fmt.Errorf("verify mappings: %w", err)
 	}
@@ -310,6 +315,7 @@ func printReport(rep report, onlyFlagged bool) {
 	}
 
 	fmt.Printf("coverage  %s  surah %d (%d ayahs)\n", rep.Source, rep.Surah, rep.AyahCount)
+	fmt.Printf("  snapshot              %s\n", rep.Version)
 	fmt.Printf("  ayahs with a chunk      %d/%d\n", rep.Covered, rep.AyahCount)
 	fmt.Printf("  ayahs searchable now    %d/%d\n", rep.Covered-len(rep.Unusable), rep.AyahCount)
 	fmt.Printf("  gaps (no chunk)         %d\n", len(rep.Gaps))

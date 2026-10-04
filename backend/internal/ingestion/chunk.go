@@ -47,7 +47,11 @@ const (
 // produces it — that depends on the real Tier-1 source and edition once they are
 // supplied. Until then the manifest can legitimately be empty.
 type Document struct {
-	ID            string    `json:"id"`
+	ID string `json:"id"`
+	// SourceVersion names a source_versions document. Empty means "whichever
+	// snapshot the registry currently pins for this source", which the service
+	// resolves before chunking. Setting it explicitly is for a manifest that
+	// deliberately pins one snapshot.
 	SourceVersion string    `json:"source_version"`
 	Language      string    `json:"language"`
 	ContentType   string    `json:"content_type"`
@@ -78,6 +82,12 @@ type Chunk struct {
 
 	SourceID      string `bson:"source_id" json:"source_id"`
 	SourceVersion string `bson:"source_version" json:"source_version"`
+	// SourceVersionHash is the content_hash of the source_versions document named
+	// by SourceVersion. Carrying it on the chunk means a stored chunk can be tied
+	// back to the exact bytes it was built from without a join, and a chunk whose
+	// snapshot no longer matches the registry's is detectable rather than merely
+	// plausible.
+	SourceVersionHash string `bson:"source_version_hash,omitempty" json:"source_version_hash,omitempty"`
 
 	SurahID     int    `bson:"surah_id" json:"surah_id"`
 	AyahStart   int    `bson:"ayah_start" json:"ayah_start"`

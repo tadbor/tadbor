@@ -21,9 +21,10 @@ important — what could not be proven about it.
 | Mapping table vs chunk collection | **no drift** |
 | Entries no automatic signal could corroborate | 19 — all read, all correct |
 
-Source: `ibn-kathir-ar`, edition `quran.com/ar-tafsir-ibn-kathir`, quran.com
-resource 14. Raw text is committed at
-`corpus/tafsir/ar-tafsir-ibn-kathir-surah-12.md` (issue #3, commit `a474646`).
+Source: `ibn-kathir-ar`, snapshot `ibn-kathir-ar-qurancom-2026-10-04`
+(edition `quran.com/ar-tafsir-ibn-kathir`, quran.com resource 14). Raw text is
+committed at `corpus/tafsir/ar-tafsir-ibn-kathir-surah-12.md` (issue #3, commit
+`a474646`).
 
 ## Where the mapping comes from
 
@@ -154,19 +155,26 @@ The coverage numbers above were produced against a probe database with the sourc
 temporarily marked verified. That was a probe, not an approval — no human has yet
 compared this text against a printed edition, and that decision is still open.
 
-### Chunks are keyed by edition slug, not by source_versions
+### Chunks are keyed by the pinned snapshot, not the edition
 
-`Service.IngestSource` defaults a document's `source_version` to
-`Source.Edition`, so chunks carry `quran.com/ar-tafsir-ibn-kathir`. The registry's
-`source_versions` collection already has a proper identity for this exact
-snapshot — `ibn-kathir-ar-qurancom-2026-10-04`, pinned by the SHA-256 of the raw
-file.
+This was found during issue #5 and fixed in the same series. `IngestSource`
+defaulted a document's `source_version` to `Source.Edition`, so chunks carried
+`quran.com/ar-tafsir-ibn-kathir` — an edition slug, not a snapshot. Two
+snapshots of one edition therefore shared one `source_version`, so re-ingesting
+corrected text would overwrite the original with nothing recording which bytes
+either came from, and the registry's SHA-256 pin never reached the chunks.
 
-Consequence: two different snapshots of the same edition share one
-`source_version`, so re-ingesting corrected text overwrites rather than coexisting,
-and the hash that actually pins this snapshot is not recorded on the chunks. This
-was left alone as out of scope for a mapping issue, but it should be resolved
-before a second edition of any source is ingested.
+Chunks are now keyed by the `source_versions` document id
+(`ibn-kathir-ar-qurancom-2026-10-04`) and carry its `content_hash` as
+`source_version_hash`. `sources.current_version` is the pointer that makes the
+choice explicit; `SourceRegistry.Version` accepts a single registered version with
+no pointer (the state issue #3 left the registry in, and it is unambiguous) but
+refuses to choose between several. A source with no registered version is an
+error rather than a fallback to the edition.
+
+`TestTwoSnapshotsOfOneEditionProduceDistinctChunks` is the regression test: the
+same edition digitised twice now yields two sets of chunks instead of one
+overwritten.
 
 ### 12:1 is surah-level content keyed to a verse
 

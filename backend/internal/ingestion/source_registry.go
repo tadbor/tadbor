@@ -2,6 +2,10 @@ package ingestion
 
 import (
 	"context"
+	"errors"
+	"fmt"
+	"sort"
+	"strings"
 
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -40,14 +44,106 @@ type Source struct {
 	IngestionStatus string `bson:"ingestion_status,omitempty" json:"ingestion_status,omitempty"`
 	IngestedAt      string `bson:"ingested_at,omitempty" json:"ingested_at,omitempty"`
 	RawTextRef      string `bson:"raw_text_ref,omitempty" json:"raw_text_ref,omitempty"`
+
+	// CurrentVersion names the source_versions document this source's content
+	// should be ingested as. It is the pointer that makes a snapshot explicit:
+	// without it, a source with two registered snapshots is ambiguous, and
+	// keying chunks off Edition silently conflates them.
+	CurrentVersion string `bson:"current_version,omitempty" json:"current_version,omitempty"`
+}
+
+// SourceVersion mirrors the "source_versions" collection (Part 2 §24). It is the
+// identity of one digitised snapshot of a work, as distinct from the work itself.
+//
+// This is deliberately separate from Source. A Source is a work — Ibn Kathir's
+// Tafsir — and stays one document no matter how many times it is re-digitised.
+// A SourceVersion is one specific snapshot of it, pinned by ContentHash. Chunks
+// are keyed by SourceVersion.ID, not by Source.Edition, so that:
+//
+//   - two snapshots of the same edition cannot overwrite each other, because
+//     they carry different version ids;
+//   - a chunk can be traced to the exact bytes it was built from, because the
+//     version carries the hash and the chunk carries that hash forward.
+type SourceVersion struct {
+	ID           string `bson:"_id,omitempty" json:"id"`
+	SourceID     string `bson:"source_id" json:"source_id"`
+	Edition      string `bson:"edition" json:"edition"`
+	VersionLabel string `bson:"version_label" json:"version_label"`
+	RawTextRef   string `bson:"raw_text_ref,omitempty" json:"raw_text_ref,omitempty"`
+	ContentHash  string `bson:"content_hash" json:"content_hash"`
 }
 
 type SourceRegistry struct {
-	sources *mongo.Collection
+	sources  *mongo.Collection
+	versions *mongo.Collection
 }
 
 func NewSourceRegistry(db *mongo.Database) *SourceRegistry {
-	return &SourceRegistry{sources: db.Collection("sources")}
+	return &SourceRegistry{
+		sources:  db.Collection("sources"),
+		versions: db.Collection("source_versions"),
+	}
+}
+
+// ErrNoPinnedVersion reports a source with no registered snapshot. It is an
+// error rather than a fallback to Edition, because falling back is the bug this
+// replaced: Edition identifies an edition, not a snapshot, and nothing would
+// record which bytes were actually ingested.
+var ErrNoPinnedVersion = errors.New("source has no registered source_version")
+
+// Version returns the snapshot a source's content must be ingested as.
+//
+// sources.current_version is authoritative. A source with exactly one registered
+// version and no pointer is accepted, because that is the state issue #3 left the
+// registry in and it is unambiguous. A source with several versions and no
+// pointer is refused: choosing one silently would ingest the wrong snapshot.
+func (r *SourceRegistry) Version(ctx context.Context, sourceID string) (*SourceVersion, error) {
+	var src Source
+	if err := r.sources.FindOne(ctx, bson.M{"_id": sourceID}).Decode(&src); err != nil {
+		return nil, err
+	}
+
+	if src.CurrentVersion != "" {
+		var v SourceVersion
+		if err := r.versions.FindOne(ctx, bson.M{"_id": src.CurrentVersion}).Decode(&v); err != nil {
+			return nil, fmt.Errorf("source %s points at version %s: %w", sourceID, src.CurrentVersion, err)
+		}
+		if v.SourceID != sourceID {
+			return nil, fmt.Errorf("version %s belongs to source %q, not %q", v.ID, v.SourceID, sourceID)
+		}
+		if v.ContentHash == "" {
+			return nil, fmt.Errorf("source_versions %s has no content_hash, so the snapshot is not pinned", v.ID)
+		}
+		return &v, nil
+	}
+
+	cur, err := r.versions.Find(ctx, bson.M{"source_id": sourceID})
+	if err != nil {
+		return nil, err
+	}
+	defer cur.Close(ctx)
+
+	var all []SourceVersion
+	if err := cur.All(ctx, &all); err != nil {
+		return nil, err
+	}
+	switch len(all) {
+	case 0:
+		return nil, fmt.Errorf("%w: %s", ErrNoPinnedVersion, sourceID)
+	case 1:
+		if all[0].ContentHash == "" {
+			return nil, fmt.Errorf("source_versions %s has no content_hash, so the snapshot is not pinned", all[0].ID)
+		}
+		return &all[0], nil
+	default:
+		ids := make([]string, 0, len(all))
+		for _, v := range all {
+			ids = append(ids, v.ID)
+		}
+		sort.Strings(ids)
+		return nil, fmt.Errorf("source %s has %d registered versions (%s) and no sources.current_version pointer; "+
+			"refusing to guess which snapshot to ingest", sourceID, len(all), strings.Join(ids, ", "))
+	}
 }
 
 // IsUsable is the single gate every retrieval/generation query should check

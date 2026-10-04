@@ -37,15 +37,16 @@ type IngestOptions struct {
 // IngestReport is the audit record of one run: what the manifest contained, what
 // was reused, what cost provider calls, and what changed in the index.
 type IngestReport struct {
-	SourceID      string `json:"source_id"`
-	SourceVersion string `json:"source_version"`
-	TotalChunks   int    `json:"total_chunks"`
-	Reused        int    `json:"reused"`
-	Pending       int    `json:"pending"`
-	PlannedCalls  int    `json:"planned_calls"`
-	Embedded      int    `json:"embedded"`
-	EmbedCalls    int    `json:"embed_calls"`
-	Written       int    `json:"written"`
+	SourceID          string `json:"source_id"`
+	SourceVersion     string `json:"source_version"`
+	TotalChunks       int    `json:"total_chunks"`
+	Reused            int    `json:"reused"`
+	Pending           int    `json:"pending"`
+	PlannedCalls      int    `json:"planned_calls"`
+	Embedded          int    `json:"embedded"`
+	EmbedCalls        int    `json:"embed_calls"`
+	SourceVersionHash string `json:"source_version_hash,omitempty"`
+	Written           int    `json:"written"`
 	// Mapped counts the Part 1 §8 mapping rows written alongside the chunks.
 	// It equals Written on every successful run; a difference means the mapping
 	// table and the chunk collection have drifted.
@@ -137,9 +138,23 @@ func (s *Service) IngestSource(ctx context.Context, sourceID string, docs []Docu
 		chunks   []Chunk
 		versions = make(map[string]bool)
 	)
+	// Chunks are keyed by the source's pinned snapshot, not by its edition. Edition
+	// identifies a work's edition; two snapshots of one edition share it, so keying
+	// on it would let a corrected re-digitisation overwrite the original with
+	// nothing recording which bytes either came from.
+	version, err := s.registry.Version(ctx, sourceID)
+	if err != nil {
+		return rep, fmt.Errorf("resolve pinned source version: %w", err)
+	}
+
 	for _, doc := range docs {
 		if doc.SourceVersion == "" {
-			doc.SourceVersion = src.Edition
+			doc.SourceVersion = version.ID
+		}
+		if doc.SourceVersion != version.ID {
+			return rep, fmt.Errorf("document %s pins source_version %q but the registry's current version for %s is %q; "+
+				"re-ingest one snapshot at a time so the index never mixes them",
+				doc.ID, doc.SourceVersion, sourceID, version.ID)
 		}
 		if doc.Language == "" {
 			doc.Language = src.Language
@@ -153,6 +168,7 @@ func (s *Service) IngestSource(ctx context.Context, sourceID string, docs []Docu
 			return rep, fmt.Errorf("document %s: %w", doc.ID, err)
 		}
 		for i := range built {
+			built[i].SourceVersionHash = version.ContentHash
 			if err := ValidateChunk(built[i]); err != nil {
 				return rep, err
 			}
@@ -169,6 +185,7 @@ func (s *Service) IngestSource(ctx context.Context, sourceID string, docs []Docu
 		sourceVersion = v
 	}
 	rep.SourceVersion = sourceVersion
+	rep.SourceVersionHash = version.ContentHash
 	rep.TotalChunks = len(chunks)
 
 	model := modelOrDefault(opts.EmbeddingModel)

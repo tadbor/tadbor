@@ -204,7 +204,7 @@ func validate(rec registryRecord) error {
 			ingestion.VerificationVerified, "unverified", rec.Source.VerificationStatus)
 	}
 	if rec.Source.Edition == "" {
-		return fmt.Errorf("source.edition is required: ingestion defaults every chunk's source_version from it")
+		return fmt.Errorf("source.edition is required: it describes the work's edition on the registry record")
 	}
 	if rec.Version.ID == "" {
 		return fmt.Errorf("version.id is required")
@@ -248,6 +248,10 @@ func apply(ctx context.Context, db *mongo.Database, rec registryRecord, rawHash 
 	if src.RawTextRef == "" {
 		src.RawTextRef = rec.Version.RawTextRef
 	}
+	// Applying a version record is what makes it the source's current snapshot.
+	// Ingestion keys every chunk by this id, so without the pointer a source with
+	// two registered snapshots would be ambiguous — see SourceRegistry.Version.
+	src.CurrentVersion = rec.Version.ID
 	if _, err := db.Collection("sources").ReplaceOne(ctx, bson.M{"_id": src.ID}, src,
 		options.Replace().SetUpsert(true)); err != nil {
 		return fmt.Errorf("sources: %w", err)

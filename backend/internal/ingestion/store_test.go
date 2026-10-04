@@ -49,10 +49,42 @@ func testDB(t *testing.T) *mongo.Database {
 	return db
 }
 
+// seedSource registers a source together with the one snapshot it pins. Every
+// service-level test needs both: chunks are keyed by the source_versions id, so a
+// source with no registered version is refused rather than falling back to its
+// edition.
 func seedSource(t *testing.T, db *mongo.Database, src Source) {
 	t.Helper()
-	_, err := db.Collection("sources").InsertOne(context.Background(), src)
-	if err != nil {
+	v := seedVersionDoc(t, db, src)
+	src.CurrentVersion = v.ID
+	if _, err := db.Collection("sources").InsertOne(context.Background(), src); err != nil {
+		t.Fatalf("seed source: %v", err)
+	}
+}
+
+// seedVersionDoc registers the snapshot a source record describes and returns it.
+// The id is derived from the edition the way a real registry record names one:
+// <source id>-<edition>.
+func seedVersionDoc(t *testing.T, db *mongo.Database, src Source) SourceVersion {
+	t.Helper()
+	v := SourceVersion{
+		ID:           src.ID + "-" + src.Edition,
+		SourceID:     src.ID,
+		Edition:      src.Edition,
+		VersionLabel: src.Edition + " snapshot",
+		ContentHash:  "sha256:" + strings.Repeat("ab", 32),
+	}
+	if _, err := db.Collection("source_versions").InsertOne(context.Background(), v); err != nil {
+		t.Fatalf("seed source version: %v", err)
+	}
+	return v
+}
+
+// seedSourceWithoutVersion registers a source with no snapshot, for the paths
+// that must refuse rather than guess.
+func seedSourceWithoutVersion(t *testing.T, db *mongo.Database, src Source) {
+	t.Helper()
+	if _, err := db.Collection("sources").InsertOne(context.Background(), src); err != nil {
 		t.Fatalf("seed source: %v", err)
 	}
 }
@@ -433,7 +465,9 @@ func TestIsUsableSemantics(t *testing.T) {
 		{"verified_by:reviewer-1", "cleared", false}, // see the doc/code mismatch note
 		{"", "", false},
 	} {
-		seedSource(t, db, Source{
+		// The gate reads only verification and licensing, so this source is
+		// registered without a snapshot: pinning one here would test nothing.
+		seedSourceWithoutVersion(t, db, Source{
 			ID:                 "s",
 			VerificationStatus: tc.verification,
 			LicensingStatus:    tc.licensing,
