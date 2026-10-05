@@ -88,6 +88,8 @@ import (
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
+
+	"tadbor/backend/internal/platform"
 )
 
 const runTimeout = 20 * time.Minute
@@ -182,21 +184,15 @@ func main() {
 	if err := godotenv.Load(); err != nil && !os.IsNotExist(err) {
 		log.Printf("godotenv: %v", err)
 	}
-	uri := os.Getenv("MONGO_URI")
-	if uri == "" {
-		log.Fatal("MONGO_URI is not set (put it in .env, or export it)")
+	// MONGO_DB_NAME is honoured like every other command.
+	db, err := platform.NewMongoConnection()
+	if err != nil {
+		log.Fatalf("mongo: %v (is MONGO_URI set?)", err)
 	}
+	defer platform.CloseMongoConnection(db)
 
 	ctx, cancel := context.WithTimeout(context.Background(), runTimeout)
 	defer cancel()
-
-	client, err := mongo.Connect(ctx, options.Client().ApplyURI(uri))
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer client.Disconnect(ctx)
-
-	db := client.Database("tadbor")
 
 	// The corpus decides how many ayahs exist; nothing here assumes 111.
 	ayahs, err := corpusAyahs(ctx, db, *surah)

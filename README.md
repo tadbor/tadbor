@@ -73,6 +73,9 @@ product, not just a running skeleton:
   quran.com plus cross-check sources on every `make seed-check` — see
   `docs/quran-corpus-validation.md`. All 111 ayahs of Surah Yusuf are real
   Uthmani text.
+- **Explanations:** none exist in the real database. The batch job is built and
+  proven, but the pipeline is correctly refusing to generate from an unapproved
+  source, so `/surah/12` shows no explanations yet.
 - **Tafsir ingestion:** chunking, verse-mapping, and embedding are written
   (`backend/cmd/build_manifest`, `ingest`, `check_coverage`, `embed_chunks`) and
   verified against a throwaway probe database — see
@@ -88,9 +91,12 @@ product, not just a running skeleton:
   publishes no licence and no per-reciter rights, so whether a public app may
   hotlink these is a judgement call for a human, not something this repo decided
   — see `docs/recitation-audio-sources.md`.
-- **Generation pipeline orchestration:** `internal/generation/service.go` can
-  call an LLM, verified against the live Gemini API, but nothing yet loops over
-  ayahs and writes `explanations` documents — that's issue #10's batch job.
+- **Generation pipeline orchestration:** `make generate` loops all 111 ayahs —
+  retrieve, simplify, validate, write pending — and is verified end to end
+  against a throwaway database; see `docs/batch-generation.md`. It cannot write
+  anything into the real database yet, because retrieval only returns chunks
+  from a `verified` source and the Ibn Kathir text is still unverified. That is
+  the guardrail in §12 working, not a bug.
 - **Reviewer auth:** `internal/platform/auth.go` gates everything under
   `/internal` with a shared `REVIEWER_PASSWORD`, and fails closed when that is
   unset. It is a shared secret, not an identity system — no per-reviewer

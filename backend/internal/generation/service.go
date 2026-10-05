@@ -2,11 +2,14 @@ package generation
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -103,6 +106,51 @@ func NewService() *Service {
 		baseBackoff: defaultBaseBackoff,
 		sleep:       time.Sleep,
 	}
+}
+
+// PromptVersion fingerprints the exact system prompt text in force.
+//
+// Part 1 §20 requires the prompt version on a review record, so that text which
+// reached a reader can be traced back to the prompt that produced it rather than
+// to whatever the prompt says now. Deriving the value from systemPrompt() rather
+// than maintaining a constant means the two cannot drift: edit the prompt and
+// every explanation generated afterwards is stamped differently, with no manual
+// step to forget.
+//
+// Only the system prompt is fingerprinted. The user prompt embeds the evidence
+// and changes on every call, so hashing it would produce a different version for
+// every ayah and mean nothing.
+func PromptVersion() string {
+	var b strings.Builder
+	b.WriteString(systemPrompt())
+	for _, t := range knownTasks() {
+		b.WriteString("\n--\n")
+		b.WriteString(taskBrief(t))
+	}
+	sum := sha256.Sum256([]byte(b.String()))
+	return "sys-" + hex.EncodeToString(sum[:])[:12]
+}
+
+// ModelVersion names the model behind LLM_API_URL, taken from the URL rather
+// than hardcoded, because the model in use is whichever one the configured
+// endpoint points at — and a review record that names a model this pipeline did
+// not use is worse than one that names none.
+func ModelVersion() string {
+	raw := os.Getenv("LLM_API_URL")
+	if raw == "" {
+		return ""
+	}
+	// .../v1beta/models/<model>:generateContent
+	if i := strings.Index(raw, "/models/"); i >= 0 {
+		rest := raw[i+len("/models/"):]
+		if j := strings.IndexAny(rest, ":/?#"); j >= 0 {
+			rest = rest[:j]
+		}
+		if rest != "" {
+			return rest
+		}
+	}
+	return raw
 }
 
 // isRetryableStatus reports whether a status is worth another attempt.
@@ -270,6 +318,61 @@ func resolveSourceRefs(refs []string, evidence []Evidence) (ids, dropped []strin
 		ids = append(ids, evidence[n-1].ID)
 	}
 	return ids, dropped
+}
+
+// taskBrief explains what one task means. It exists because "simplify" is
+// ambiguous to a model in a way "translate" is not: asked only to transform
+// evidence, Gemini returns a condensed paraphrase of Ibn Kathir in the same
+// register — scholarly Arabic, chains of narration intact, attributed to the
+// scholar by name. That is not an explanation a beginner can read, and it is not
+// what "simplify" asks for.
+//
+// It was found by generating for real and reading the output, which is the only
+// way this failure is visible: the draft is fluent, faithful, grounded, cites
+// correctly, passes every validation check, and is still wrong for the audience.
+//
+// The guidance is per-task rather than global because the tasks fail in opposite
+// directions — "simplify" needs its register lowered, "translate" needs it
+// preserved — and one global instruction would have to average them into
+// something that helps neither.
+func taskBrief(task string) string {
+	switch task {
+	case "simplify":
+		return `Task: SIMPLIFY for a beginner who knows the Arabic alphabet and nothing
+about tafsir. Write plain modern Arabic.
+
+- Say what the verse means and why it matters, in your own words. Aim for a few
+  short sentences — far shorter than the evidence.
+- Do not reproduce the evidence closely, and do not compress it. A shortened
+  version of the commentary is not a simplification; if your draft could be
+  matched against the evidence phrase by phrase, start again.
+- Drop narration chains, legal reasoning and technical asbab. Keep only what
+  helps a beginner understand the verse.
+- Do not narrate your source. Never write "Ibn Kathir says", "the scholars
+  mention", "it is reported that" or any equivalent. Address the reader
+  directly about the verse. The reader is not being told a story about scholars.
+- Avoid theological register: no "should", no "must", no instructions to the
+  reader about belief or practice. Explain what the text means, not what to do
+  about it.`
+	case "translate":
+		return `Task: TRANSLATE the approved text into the target language. Preserve every
+claim, hedge and qualification exactly. Improve fluency only; add nothing.`
+	case "adapt-dialect":
+		return `Task: ADAPT the approved text into the requested dialect. Preserve subject,
+certainty, negation, modality and conditions exactly — a change in certainty is
+the failure this task must not make.`
+	default:
+		return ""
+	}
+}
+
+// knownTasks is the set of task briefs folded into PromptVersion. Editing any of
+// them changes the version, so a review record cannot silently claim a prompt
+// version that no longer describes the prompt.
+func knownTasks() []string {
+	tasks := []string{"simplify", "translate", "adapt-dialect"}
+	sort.Strings(tasks)
+	return tasks
 }
 
 func systemPrompt() string {

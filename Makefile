@@ -1,4 +1,4 @@
-.PHONY: up up-d down logs seed seed-check audio audio-check dev mobile mobile-web mobile-tunnel mobile-android api-tunnel
+.PHONY: up up-d down logs seed seed-check audio audio-check generate generate-check dev mobile mobile-web mobile-tunnel mobile-android api-tunnel
 
 # Starts MongoDB (the only Dockerized service) — backend + web are NOT in Docker.
 up:
@@ -69,6 +69,27 @@ audio:
 audio-check:
 	@set -a; [ -f .env ] && . ./.env; set +a; \
 	cd backend && go run ./cmd/ingest_recitations -check
+
+# Generates Simplified Arabic explanations for all 111 ayahs and leaves each one
+# pending human review (issue #10).
+#
+# Takes ~24 minutes and cannot currently write anything: retrieval only returns
+# chunks from a source with verification_status: verified, and the committed Ibn
+# Kathir text is still unverified, so every ayah reports "insufficient evidence".
+# That is the guardrail working, not a misconfiguration — see
+# docs/reviews/ibn-kathir-ar-surah-12.md.
+#
+# It is NOT part of `make seed`: this makes up to 111 provider calls against a
+# free tier that allows 5 a minute, and nobody should pay that by accident.
+generate:
+	@set -a; [ -f .env ] && . ./.env; set +a; \
+	cd backend && go run ./cmd/generate_explanations -live
+
+# Audits pending explanations without calling the provider. Exits non-zero unless
+# all 111 are present, so it works as a gate rather than a report.
+generate-check:
+	@set -a; [ -f .env ] && . ./.env; set +a; \
+	cd backend && go run ./cmd/generate_explanations -check
 
 # Mobile runs OUTSIDE Docker (Expo needs to talk to a device/simulator directly —
 # see mobile/README.md for why this isn't containerized).
