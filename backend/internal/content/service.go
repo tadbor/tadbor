@@ -35,3 +35,16 @@ func (s *Service) GetExplanations(ctx context.Context, surahID int, style string
 	}
 	return results, nil
 }
+
+func (s *Service) GetIntroduction(ctx context.Context, surahID int) (*SurahIntroduction, error) {
+	filter := bson.M{
+		"surah_id":      surahID,
+		"review_status": "published",
+	}
+	var intro SurahIntroduction
+	err := s.explanations.Database().Collection("surah_introductions").FindOne(ctx, filter).Decode(&intro)
+	if err != nil {
+		return nil, err
+	}
+	return &intro, nil
+}
