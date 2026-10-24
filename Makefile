@@ -34,8 +34,9 @@ dev:
 # Loads Surah Yusuf into MongoDB. Run once, after `make up-d`.
 #
 # The Quran text comes from backend/cmd/seed_quran, which fetches the verified
-# Uthmani corpus (issue #2). The reciters still carry placeholder audio (issue #14).
-# Both steps upsert, so this is safe to re-run.
+# Uthmani corpus (issue #2). This also upserts the 4 reciters, but NOT their audio:
+# `make audio` does that, so re-seeding cannot overwrite verified audio with
+# placeholders. Both steps upsert, so this is safe to re-run.
 #
 # The .env is sourced here rather than left to the commands' own godotenv.Load(),
 # because those run inside backend/ and the repo's .env is one directory up — which
