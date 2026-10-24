@@ -1,7 +1,6 @@
 package content
 
 import (
-	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -21,7 +20,6 @@ func TestPublicRoutesOnlyReturnPublished(t *testing.T) {
 		r := gin.New()
 		RegisterRoutes(r, NewService(mt.DB))
 
-		// Mock returns only published (service filters)
 		first := mtest.CreateCursorResponse(
 			1,
 			"tadbor.explanations",
@@ -66,9 +64,7 @@ func TestPublicRoutesOnlyReturnPublished(t *testing.T) {
 }
 
 func TestNoLeakOfInternalFields(t *testing.T) {
-	// Ensure Explanation struct tags hide internal fields
 	var e Explanation
 	b, _ := json.Marshal(e)
-	// Just verify the struct is designed correctly - fields with json:"-" won't appear
 	_ = b
 }
