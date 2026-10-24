@@ -357,7 +357,7 @@ about tafsir. Write plain modern Arabic.
 	case "translate":
 		return `Task: TRANSLATE the approved text into the target language. Preserve every
 claim, hedge and qualification exactly. Improve fluency only; add nothing.`
-	case "adapt-dialect":
+	case "adapt-dialect", "adapt_dialect":
 		return `Task: ADAPT the approved text into the requested dialect. Preserve subject,
 certainty, negation, modality and conditions exactly — a change in certainty is
 the failure this task must not make.`

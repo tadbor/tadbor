@@ -197,6 +197,8 @@ type report struct {
 	Task    string `json:"task"`
 	Style   string `json:"style"`
 	Level   string `json:"level"`
+	Input   string `json:"input"`
+	Base    string `json:"base_style,omitempty"`
 	Ayahs   int    `json:"ayahs"`
 	Planned int    `json:"planned"`
 
@@ -243,6 +245,8 @@ func main() {
 		pace   = flag.Duration("pace", defaultPace, "minimum gap between provider calls (the free tier allows 5/minute)")
 		limit  = flag.Int("limit", 0, "stop after this many ayahs (0 = no limit)")
 		expect = flag.Int("expect", 0, "ayah count the audit requires; 0 reads it from the corpus")
+		from   = flag.String("from", "evidence", "input to transform: evidence (retrieved Tafsir) or published (an already-reviewed explanation)")
+		base   = flag.String("base-style", "simplified_ar", "published style used as the source text when -from published")
 	)
 	flag.Parse()
 
@@ -254,6 +258,16 @@ func main() {
 	}
 	if *limit < 0 {
 		log.Fatalf("-limit cannot be negative, got %d", *limit)
+	}
+	if *from != "evidence" && *from != "published" {
+		log.Fatalf("-from must be evidence or published, got %q", *from)
+	}
+	// Translating and adapting operate on an already-reviewed meaning, never on
+	// raw evidence (§16-17). Running them from evidence would re-derive the
+	// interpretation instead of carrying the approved one forward, which is the
+	// thing those tasks exist to avoid.
+	if *from == "published" && *task == "simplify" {
+		log.Fatal("simplify derives meaning from evidence; -from published is for translate and adapt_dialect")
 	}
 
 	if err := godotenv.Load(); err != nil && !os.IsNotExist(err) {
@@ -282,10 +296,13 @@ func main() {
 	}
 
 	r := report{
-		SurahID: *surah, Task: *task, Style: *style, Level: *level,
+		SurahID: *surah, Task: *task, Style: *style, Level: *level, Input: *from,
 		Ayahs: ayahs, Planned: ayahs,
 		PromptVersion: generation.PromptVersion(),
 		ModelVersion:  generation.ModelVersion(),
+	}
+	if *from == "published" {
+		r.Base = *base
 	}
 
 	if *check {
@@ -376,14 +393,70 @@ func main() {
 			r.Regenerated++
 		}
 
-		chunks, err := retrievalSvc.GetEvidenceForAyah(ctx, *surah, ayah)
-		if err != nil {
-			gr.Outcome, gr.Error = "insufficient_evidence", err.Error()
-			r.NoEvidence++
-			r.Gaps = append(r.Gaps, fmt.Sprintf("%d:%s", ayah, err.Error()))
-			gr.DurationMS = time.Since(started).Milliseconds()
-			writeRun(ctx, runs, gr)
-			continue
+		var (
+			chunks       []retrieval.TafsirChunk
+			evidence     []generation.Evidence
+			evidenceText []string
+			carryRefs    []string
+			carryVersion string
+		)
+
+		if *from == "published" {
+			baseDoc, err := findPublishedBase(ctx, explanations, *surah, ayah, *base, *level)
+			if err != nil {
+				log.Fatal(err)
+			}
+			if baseDoc == nil {
+				gr.Outcome = "insufficient_evidence"
+				gr.Error = fmt.Sprintf("no published %s explanation to transform", *base)
+				r.NoEvidence++
+				r.Gaps = append(r.Gaps, fmt.Sprintf("%d:%s", ayah, gr.Error))
+				gr.DurationMS = time.Since(started).Milliseconds()
+				writeRun(ctx, runs, gr)
+				continue
+			}
+
+			// The meaning came from an explanation a human already approved, so
+			// its citation chain is carried forward rather than re-derived. The
+			// chunks are loaded only to re-run §19's grounding and source checks.
+			carryRefs, carryVersion = baseDoc.SourceRefs, baseDoc.SourceVersion
+			chunks, err = loadChunksByIDs(ctx, db, carryRefs)
+			if err != nil {
+				gr.Outcome, gr.Error = "invalid_grounding", err.Error()
+				r.NoEvidence++
+				r.Gaps = append(r.Gaps, fmt.Sprintf("%d:%s", ayah, err.Error()))
+				gr.DurationMS = time.Since(started).Milliseconds()
+				writeRun(ctx, runs, gr)
+				continue
+			}
+			if err := checkGrounding(ctx, db, *surah, ayah, chunks); err != nil {
+				gr.Outcome, gr.Error = "invalid_grounding", err.Error()
+				gr.RetrievedChunkIDs = chunkIDs(chunks)
+				r.NoEvidence++
+				r.Gaps = append(r.Gaps, fmt.Sprintf("%d:%s", ayah, err.Error()))
+				gr.DurationMS = time.Since(started).Milliseconds()
+				writeRun(ctx, runs, gr)
+				continue
+			}
+
+			// The approved text is the only substantive input. Sending the
+			// underlying Tafsir as well would invite the model to re-translate
+			// the commentary instead of the reviewed explanation (§16).
+			evidence = []generation.Evidence{{ID: "base-explanation", Text: baseDoc.Text}}
+			evidenceText = []string{baseDoc.Text}
+		} else {
+			var err error
+			chunks, err = retrievalSvc.GetEvidenceForAyah(ctx, *surah, ayah)
+			if err != nil {
+				gr.Outcome, gr.Error = "insufficient_evidence", err.Error()
+				r.NoEvidence++
+				r.Gaps = append(r.Gaps, fmt.Sprintf("%d:%s", ayah, err.Error()))
+				gr.DurationMS = time.Since(started).Milliseconds()
+				writeRun(ctx, runs, gr)
+				continue
+			}
+			evidence = toEvidence(chunks)
+			evidenceText = chunkTexts(chunks)
 		}
 		r.WithEvidence++
 
@@ -412,7 +485,7 @@ func main() {
 		}
 
 		gr.RetrievedChunkIDs = chunkIDs(chunks)
-		gr.EvidenceText = chunkTexts(chunks)
+		gr.EvidenceText = evidenceText
 
 		if *dry {
 			gr.Outcome = "dry_run"
@@ -425,7 +498,7 @@ func main() {
 			Task:           *task,
 			TargetLanguage: targetLanguage(*style),
 			TargetStyle:    *style,
-			Evidence:       toEvidence(chunks),
+			Evidence:       evidence,
 		}
 
 		if gap := nextGap(*pace, lastFailed); gap > 0 {
@@ -444,6 +517,14 @@ func main() {
 			continue
 		}
 		lastFailed = false
+
+		// Translation and dialect adaptation inherit the approved explanation's
+		// citation chain. The model cites the text it was given, which is not a
+		// chunk id, so that placeholder is replaced with the refs the reviewed
+		// meaning already carries.
+		if *from == "published" {
+			out.SourceRefs = append([]string(nil), carryRefs...)
+		}
 
 		gr.SourceRefs = out.SourceRefs
 		gr.Warnings = out.Warnings
@@ -474,13 +555,16 @@ func main() {
 			continue
 		}
 
-		version, err := currentSourceVersion(ctx, db, chunks)
-		if err != nil {
-			gr.Outcome, gr.Error = "provider_error", err.Error()
-			r.ProviderErrors++
-			gr.DurationMS = time.Since(started).Milliseconds()
-			writeRun(ctx, runs, gr)
-			continue
+		version := carryVersion
+		if *from != "published" {
+			version, err = currentSourceVersion(ctx, db, chunks)
+			if err != nil {
+				gr.Outcome, gr.Error = "provider_error", err.Error()
+				r.ProviderErrors++
+				gr.DurationMS = time.Since(started).Milliseconds()
+				writeRun(ctx, runs, gr)
+				continue
+			}
 		}
 
 		doc := explanationDoc{
@@ -751,6 +835,81 @@ type existingExplanation struct {
 	ReviewStatus  string `bson:"review_status"`
 	RunID         string `bson:"generation_run_id"`
 	PromptVersion string `bson:"prompt_version"`
+}
+
+// publishedBase is an explanation a human has already approved, used as the
+// input for translation and dialect adaptation (§16-17). Only published text is
+// eligible: transforming a pending or rejected draft would let an unreviewed
+// interpretation reach a reader through a style nobody re-derived.
+type publishedBase struct {
+	Text          string   `bson:"text"`
+	SourceRefs    []string `bson:"source_refs"`
+	SourceVersion string   `bson:"source_version_snapshot"`
+}
+
+// findPublishedBase returns the approved explanation for one verse and style,
+// or nil when there is none. The caller records that as a gap rather than
+// generating a translation from nothing.
+func findPublishedBase(ctx context.Context, explanations *mongo.Collection, surahID, ayah int, style, level string) (*publishedBase, error) {
+	var b publishedBase
+	err := explanations.FindOne(ctx,
+		bson.M{
+			"surah_id": surahID, "ayah_start": ayah, "style": style,
+			"level": level, "review_status": "published",
+		},
+		options.FindOne().SetProjection(bson.M{
+			"text": 1, "source_refs": 1, "source_version_snapshot": 1,
+		}),
+	).Decode(&b)
+	if errors.Is(err, mongo.ErrNoDocuments) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	if strings.TrimSpace(b.Text) == "" {
+		return nil, fmt.Errorf("published %s explanation for %d:%d has empty text", style, surahID, ayah)
+	}
+	if len(b.SourceRefs) == 0 {
+		return nil, fmt.Errorf("published %s explanation for %d:%d has no source_refs to carry forward", style, surahID, ayah)
+	}
+	return &b, nil
+}
+
+// loadChunksByIDs resolves a carried citation chain back to its chunks, in the
+// order the refs were stored. Missing refs are an error, not a silent drop: a
+// translation that cannot point at the grounding of its source is not citable.
+func loadChunksByIDs(ctx context.Context, db *mongo.Database, ids []string) ([]retrieval.TafsirChunk, error) {
+	if len(ids) == 0 {
+		return nil, errors.New("no source_refs to resolve")
+	}
+	list := make([]any, 0, len(ids))
+	for _, id := range ids {
+		list = append(list, id)
+	}
+	cur, err := db.Collection("tafsir_chunks").Find(ctx, bson.M{"_id": bson.M{"$in": list}})
+	if err != nil {
+		return nil, err
+	}
+	defer cur.Close(ctx)
+
+	var found []retrieval.TafsirChunk
+	if err := cur.All(ctx, &found); err != nil {
+		return nil, err
+	}
+	byID := make(map[string]retrieval.TafsirChunk, len(found))
+	for _, c := range found {
+		byID[c.ID] = c
+	}
+	out := make([]retrieval.TafsirChunk, 0, len(ids))
+	for _, id := range ids {
+		c, ok := byID[id]
+		if !ok {
+			return nil, fmt.Errorf("carried source_ref %s no longer resolves to a chunk", id)
+		}
+		out = append(out, c)
+	}
+	return out, nil
 }
 
 // nextGap is the pause before the next provider call, longer after a failure.

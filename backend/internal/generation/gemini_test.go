@@ -195,3 +195,22 @@ func mustJSON(t *testing.T, s string) string {
 	}
 	return string(b)
 }
+
+// The batch job takes its task names from the issue tracker, where the dialect
+// task is spelled adapt_dialect, while the prompt table historically used
+// adapt-dialect. Both spellings must select the same brief: falling through to
+// the bare task line drops the certainty-preservation instruction, which is the
+// single failure mode §17 says to guard against.
+func TestAdaptDialectSpellingsShareBrief(t *testing.T) {
+	hyphen := taskBrief("adapt-dialect")
+	underscore := taskBrief("adapt_dialect")
+	if hyphen == "" || underscore == "" {
+		t.Fatalf("dialect task missing a brief: hyphen=%q underscore=%q", hyphen, underscore)
+	}
+	if hyphen != underscore {
+		t.Errorf("dialect spellings produce different briefs:\n hyphen: %q\n underscore: %q", hyphen, underscore)
+	}
+	if !strings.Contains(underscore, "certainty") {
+		t.Error("dialect brief does not mention certainty, the failure this task must not make")
+	}
+}
