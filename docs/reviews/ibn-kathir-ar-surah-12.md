@@ -733,3 +733,4 @@ Simplified (search only, never quote this as the Quran):
 _Record any divergence from the printed edition here: surah, ayah, printed page,
 and what differs. An entry marked `differs` blocks verification until resolved._
 
+git -C /home/mahmoudrabbas/Desktop/tadbor/tadbor push origin main 2>&1 | tail -2
