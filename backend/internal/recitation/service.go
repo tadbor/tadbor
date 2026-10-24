@@ -82,3 +82,12 @@ func (s *Service) GetReciterStatus(ctx context.Context, reciterID string) (*Reci
 	}
 	return &reciter, nil
 }
+
+func (s *Service) GetRecitationWithMetadata(ctx context.Context, surahID int, reciterID string) ([]Recitation, error) {
+	// Return recitations with explicit availability
+	recs, err := s.GetSurahRecitations(ctx, surahID, reciterID)
+	if err != nil {
+		return nil, err
+	}
+	return recs, nil
+}
