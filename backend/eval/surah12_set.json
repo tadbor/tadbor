@@ -1,0 +1,14 @@
+[
+  {
+    "id": "eval-12-1",
+    "surah": 12,
+    "ayah_start": 1,
+    "ayah_end": 1,
+    "style": "simplified_ar",
+    "expectations": {
+      "citations_resolve": true,
+      "no_extra_claims": true,
+      "preserve_certainty": true
+    }
+  }
+]
