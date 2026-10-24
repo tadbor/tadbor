@@ -73,3 +73,12 @@ func (s *Service) GetSurahRecitations(ctx context.Context, surahID int, reciterI
 	}
 	return results, nil
 }
+
+func (s *Service) GetReciterStatus(ctx context.Context, reciterID string) (*Reciter, error) {
+	var reciter Reciter
+	err := s.reciters.FindOne(ctx, bson.M{"_id": reciterID}).Decode(&reciter)
+	if err != nil {
+		return nil, err
+	}
+	return &reciter, nil
+}
