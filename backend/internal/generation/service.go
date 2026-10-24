@@ -361,6 +361,12 @@ claim, hedge and qualification exactly. Improve fluency only; add nothing.`
 		return `Task: ADAPT the approved text into the requested dialect. Preserve subject,
 certainty, negation, modality and conditions exactly — a change in certainty is
 the failure this task must not make.`
+	case "introduce":
+		return `Task: WRITE a surah introduction using ONLY the provided evidence.
+- Include classification, context, themes if supported by evidence.
+- For disputed reports, present differing views with attribution.
+- Every claim must have source_refs.
+- Do not invent historical details or narrations.`
 	default:
 		return ""
 	}
