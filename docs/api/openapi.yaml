@@ -1,0 +1,160 @@
+openapi: 3.0.3
+info:
+  title: Tadbor API
+  description: Quran understanding app API - public routes serve only published content
+  version: 1.0.0
+paths:
+  /health:
+    get:
+      summary: Health check
+      responses:
+        '200':
+          description: OK
+  /surahs/{surahId}/ayahs:
+    get:
+      summary: Get ayahs for a surah
+      parameters:
+        - name: surahId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: List of ayahs
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Ayah'
+  /surahs/{surahId}/explanations:
+    get:
+      summary: Get published explanations for a surah
+      description: Only returns explanations with review_status published. Internal fields not exposed.
+      parameters:
+        - name: surahId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: style
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [simplified_ar, egyptian_ar, en]
+            default: simplified_ar
+      responses:
+        '200':
+          description: List of published explanations
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Explanation'
+  /reciters:
+    get:
+      summary: Get available reciters
+      responses:
+        '200':
+          description: List of reciters
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Reciter'
+  /surahs/{surahId}/recitations:
+    get:
+      summary: Get recitations for a surah
+      parameters:
+        - name: surahId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: reciter
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: List of recitations
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Recitation'
+components:
+  schemas:
+    Ayah:
+      type: object
+      required: [id, surah_id, ayah_number, text_uthmani]
+      properties:
+        id:
+          type: string
+        surah_id:
+          type: integer
+        ayah_number:
+          type: integer
+        text_uthmani:
+          type: string
+        text_simple:
+          type: string
+        corpus_version:
+          type: string
+        content_hash:
+          type: string
+    Explanation:
+      type: object
+      required: [id, surah_id, ayah_start, ayah_end, style, level, text, source_refs]
+      properties:
+        id:
+          type: string
+        surah_id:
+          type: integer
+        ayah_start:
+          type: integer
+        ayah_end:
+          type: integer
+        style:
+          type: string
+        level:
+          type: string
+        text:
+          type: string
+        source_refs:
+          type: array
+          items:
+            type: string
+      description: review_status and source_version_snapshot are never exposed
+    Reciter:
+      type: object
+      required: [id, name]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        style_note:
+          type: string
+    Recitation:
+      type: object
+      required: [id, reciter_id, surah_id, ayah_number, audio_url]
+      properties:
+        id:
+          type: string
+        reciter_id:
+          type: string
+        surah_id:
+          type: integer
+        ayah_number:
+          type: integer
+        audio_url:
+          type: string
+        duration_seconds:
+          type: number
