@@ -187,4 +187,4 @@ Both probe databases were dropped afterwards.
 - **No `level` beyond `beginner`.** The flag exists and is written to the
   document, but nothing generates `tadabbur` or `advanced` yet.
 - **One model, one prompt at a time.** No A/B comparison of prompts, so
-  "this prompt is better" rests on reading output, not on measurement.
+  "this prompt is better" rests on reading output, not on measurement.git -C /home/mahmoudrabbas/Desktop/tadbor/tadbor push origin main 2>&1 | tail -2
