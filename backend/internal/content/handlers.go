@@ -36,7 +36,7 @@ func RegisterIntroductionRoutes(router *gin.Engine, svc *Service) {
 		intro, err := svc.GetIntroduction(c.Request.Context(), surahID)
 		if err != nil {
 			if err == mongo.ErrNoDocuments {
-				c.JSON(http.StatusNotFound, gin.H{"error": "introduction not found"})
+				c.JSON(http.StatusNotFound, gin.H{"status": "unavailable", "error": "introduction not available"})
 				return
 			}
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
