@@ -1,6 +1,7 @@
 package generation
 
 import (
+	"context"
 	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
