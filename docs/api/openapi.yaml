@@ -158,3 +158,26 @@ components:
           type: string
         duration_seconds:
           type: number
+
+  /surahs/{surahId}/introduction:
+    get:
+      summary: Get published introduction for a surah
+      description: Only returns published introductions. Internal fields not exposed.
+      parameters:
+        - name: surahId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: style
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Published introduction
+        '404':
+          description: Introduction not found or not published
+        '400':
+          description: Invalid surah id

@@ -46,7 +46,9 @@ func main() {
 	})
 
 	quran.RegisterRoutes(router, quran.NewService(db))
-	content.RegisterRoutes(router, content.NewService(db))
+	contentService := content.NewService(db)
+	content.RegisterRoutes(router, contentService)
+	content.RegisterIntroductionRoutes(router, contentService)
 	recitation.RegisterRoutes(router, recitation.NewService(db))
 
 	// The embedding provider is optional. Without credentials retrieval still
