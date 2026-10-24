@@ -1,0 +1,11 @@
+{
+  "_id": "exp1",
+  "surah_id": 12,
+  "ayah_start": 1,
+  "ayah_end": 1,
+  "style": "simplified_ar",
+  "level": "beginner",
+  "text": "معنى مبسط",
+  "source_refs": ["chunk1"],
+  "review_status": "published"
+}
