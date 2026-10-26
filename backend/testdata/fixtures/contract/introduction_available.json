@@ -1,0 +1,47 @@
+{
+  "id": "fixture-intro-12-simplified_ar",
+  "surah_id": 12,
+  "style": "simplified_ar",
+  "level": "beginner",
+  "sections": [
+    {
+      "type": "context",
+      "title": "FIXTURE section - not reviewed content",
+      "content": "FIXTURE introduction text - not Quranic text",
+      "source_refs": [
+        "fixture-chunk-1"
+      ],
+      "claims": [
+        {
+          "text": "FIXTURE claim - not a reviewed statement",
+          "source_refs": [
+            "fixture-chunk-1"
+          ]
+        }
+      ]
+    }
+  ],
+  "source_refs": [
+    "fixture-chunk-1"
+  ],
+  "attributions": [
+    {
+      "source_id": "fixture-source",
+      "title": "FIXTURE source",
+      "author": "FIXTURE author",
+      "edition": "fixture edition",
+      "source_version": "fixture-v1",
+      "source_refs": [
+        "fixture-chunk-1"
+      ]
+    }
+  ],
+  "differing_reports": [
+    {
+      "text": "FIXTURE differing report - not reviewed content",
+      "source_refs": [
+        "fixture-chunk-1"
+      ]
+    }
+  ]
+}

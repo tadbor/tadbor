@@ -17,6 +17,8 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: '1.22'
+      - name: API contract
+        run: go test ./internal/contract -count=1 -v
       - name: Test
         run: go test ./... -count=1
 

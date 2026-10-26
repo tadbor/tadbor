@@ -1,6 +1,7 @@
 package content
 
 import (
+	"context"
 	"net/http"
 	"strconv"
 
@@ -8,7 +9,12 @@ import (
 	"go.mongodb.org/mongo-driver/mongo"
 )
 
-func RegisterRoutes(router *gin.Engine, svc *Service) {
+// ExplanationReader is the read surface for the public explanation route.
+type ExplanationReader interface {
+	GetExplanations(ctx context.Context, surahID int, style string) ([]Explanation, error)
+}
+
+func RegisterRoutes(router *gin.Engine, svc ExplanationReader) {
 	router.GET("/surahs/:surahId/explanations", func(c *gin.Context) {
 		surahID, err := strconv.Atoi(c.Param("surahId"))
 		if err != nil {
@@ -21,6 +27,9 @@ func RegisterRoutes(router *gin.Engine, svc *Service) {
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
+		}
+		if explanations == nil {
+			explanations = []Explanation{}
 		}
 		c.JSON(http.StatusOK, explanations)
 	})

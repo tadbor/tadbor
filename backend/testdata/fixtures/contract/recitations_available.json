@@ -1,0 +1,18 @@
+[
+  {
+    "id": "fixture-recitation-12-1",
+    "reciter_id": "fixture-reciter-1",
+    "surah_id": 12,
+    "ayah_number": 1,
+    "audio_url": "https://fixture.invalid/audio/12-1.mp3",
+    "duration_seconds": 7
+  },
+  {
+    "id": "fixture-recitation-12-2",
+    "reciter_id": "fixture-reciter-1",
+    "surah_id": 12,
+    "ayah_number": 2,
+    "audio_url": "https://fixture.invalid/audio/12-2.mp3",
+    "duration_seconds": 6
+  }
+]

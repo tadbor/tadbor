@@ -1,0 +1,14 @@
+[
+  {
+    "id": "fixture-exp-12-1-simplified_ar",
+    "surah_id": 12,
+    "ayah_start": 1,
+    "ayah_end": 2,
+    "style": "simplified_ar",
+    "level": "beginner",
+    "text": "FIXTURE explanation - not Quranic text and not reviewed content",
+    "source_refs": [
+      "fixture-chunk-1"
+    ]
+  }
+]

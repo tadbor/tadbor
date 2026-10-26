@@ -1,0 +1,71 @@
+[
+  {
+    "number": 12,
+    "name_arabic": "يوسف",
+    "name_transliteration": "Yusuf",
+    "ayah_count": 111,
+    "revelation": {
+      "classification": "unknown"
+    },
+    "readiness": {
+      "ayah_text": "available",
+      "introduction": {
+        "simplified_ar": "available",
+        "egyptian_ar": "processing",
+        "en": "unavailable"
+      },
+      "audio": "available",
+      "explanations": {
+        "simplified_ar": "available",
+        "egyptian_ar": "processing",
+        "en": "processing"
+      }
+    }
+  },
+  {
+    "number": 99,
+    "name_arabic": "سورة تجريبية ٩٩ (FIXTURE)",
+    "name_transliteration": "FIXTURE ninety-nine",
+    "ayah_count": 3,
+    "revelation": {
+      "classification": "unknown"
+    },
+    "readiness": {
+      "ayah_text": "unavailable",
+      "introduction": {
+        "simplified_ar": "unavailable",
+        "egyptian_ar": "unavailable",
+        "en": "unavailable"
+      },
+      "audio": "unavailable",
+      "explanations": {
+        "simplified_ar": "unavailable",
+        "egyptian_ar": "unavailable",
+        "en": "unavailable"
+      }
+    }
+  },
+  {
+    "number": 100,
+    "name_arabic": "سورة تجريبية ١٠٠ (FIXTURE)",
+    "name_transliteration": "FIXTURE one hundred",
+    "ayah_count": 4,
+    "revelation": {
+      "classification": "unknown"
+    },
+    "readiness": {
+      "ayah_text": "available",
+      "introduction": {
+        "simplified_ar": "processing",
+        "egyptian_ar": "available",
+        "en": "unavailable"
+      },
+      "audio": "processing",
+      "explanations": {
+        "simplified_ar": "processing",
+        "egyptian_ar": "available",
+        "en": "available"
+      }
+    }
+  }
+]

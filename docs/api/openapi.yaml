@@ -1,96 +1,394 @@
 openapi: 3.0.3
 info:
   title: Tadbor API
-  description: Quran understanding app API - public routes serve only published content
   version: 1.0.0
+  description: |
+    Public API contract for the Tadbor internal MVP.
+
+    ## Public boundary
+
+    Public routes serve published content only. Review status, source-version
+    snapshots, prompt and model versions, reviewer identity and other internal
+    fields are never exposed. A public response must not be used to infer that a
+    source or explanation has been approved: approval is a separate human
+    process.
+
+    ## Content readiness
+
+    Readiness is one of `available`, `processing` or `unavailable`.
+
+    - `200` with content means the requested content is available.
+    - `200` with an empty list means the content type is available but has no
+      items for this exact selection. It is not an error and it never means
+      "substitute another style".
+    - `202` with `{"status":"processing"}` means generation or review is in
+      progress. The client should retry later and must not render it as empty.
+    - `404` with `{"status":"unavailable"}` means no content exists for this
+      exact surah/style. The client must show an unavailable state, not an error
+      and not another style's content.
+    - `4xx` other than the above and `5xx` with `{"error":"..."}` are errors.
+      A client must never show an error as successful empty content.
+
+    Ayah text is an immutable verified corpus, so it can be `available` or
+    `unavailable` but never `processing`. Introductions, audio and each
+    explanation style can use all three states.
+
+    ## Styles
+
+    The canonical style IDs are `simplified_ar`, `egyptian_ar` and `en`. A
+    missing style never falls back to another style: when the exact requested
+    style has no content, the response is empty, processing or unavailable, never
+    a different style's content. Clients must send these exact IDs; display
+    labels come from the client, not from the API.
+
+    ## Contract tests
+
+    This document is the source of truth for backend, web and mobile. The
+    implementing issues #34 (`GET /surahs`), #35 (introductions) and #36
+    (explanation styles/ranges) MUST add handler-conformance tests that validate
+    their responses against this document in CI.
+
+    Fixtures and the shared contract test live under
+    `backend/testdata/fixtures/contract` and `backend/internal/contract`.
+    A change to a public response shape must update the spec, the fixtures and
+    the handler tests in the same pull request.
+  contact:
+    name: Tadbor maintainers
+servers:
+  - url: http://localhost:8080
+    description: Local development
+tags:
+  - name: system
+  - name: library
+  - name: content
+  - name: audio
 paths:
   /health:
     get:
+      operationId: getHealth
+      tags: [system]
       summary: Health check
       responses:
         '200':
-          description: OK
-  /surahs/{surahId}/ayahs:
+          description: The API process is running.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Health'
+
+  /surahs:
     get:
-      summary: Get ayahs for a surah
-      parameters:
-        - name: surahId
-          in: path
-          required: true
-          schema:
-            type: integer
+      operationId: listSurahs
+      tags: [library]
+      summary: List surah metadata and content readiness
+      description: |
+        Contract for the library endpoint implemented by #34. Results are sorted
+        by surah number ascending and derived from stored metadata, never
+        hard-coded. Unseeded surahs are absent; a caller asking for an absent
+        surah receives the unavailable semantics of that surah's routes.
+
+        Metadata fields follow #32: number, Arabic name, transliteration and ayah
+        count. Revelation classification is optional; when it is not supported by
+        a named source it is omitted or marked `unknown`, never invented.
       responses:
         '200':
-          description: List of ayahs
+          description: Surah metadata with readiness per content type.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Surah'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+  /surahs/{surahId}/ayahs:
+    get:
+      operationId: getSurahAyahs
+      tags: [content]
+      summary: Get ayahs for a surah
+      description: |
+        Returns the surah's ayahs in canonical ayah order. Text is the verified
+        Uthmani corpus; `text_simple` is search-only and is never presented as
+        the Quran. An empty `200` is not expected for a seeded surah; callers
+        must treat `404 unavailable` as "text not seeded" and a `5xx` as an
+        error.
+      parameters:
+        - $ref: '#/components/parameters/SurahId'
+      responses:
+        '200':
+          description: List of ayahs in canonical order.
           content:
             application/json:
               schema:
                 type: array
                 items:
                   $ref: '#/components/schemas/Ayah'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/Unavailable'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
   /surahs/{surahId}/explanations:
     get:
-      summary: Get published explanations for a surah
-      description: Only returns explanations with review_status published. Internal fields not exposed.
+      operationId: listSurahExplanations
+      tags: [content]
+      summary: Get published explanations for a surah and style
+      description: |
+        Returns only explanations with review status `published` for the exact
+        requested style. Internal fields (`review_status`,
+        `source_version_snapshot`) are never exposed.
+
+        The `202` and `404` responses are the contracted availability states for
+        #36. Until #36 lands, the route returns an empty `200` for those cases;
+        clients must not infer that empty means available once #36 is
+        implemented. A missing style never falls back to another style.
       parameters:
-        - name: surahId
-          in: path
-          required: true
-          schema:
-            type: integer
-        - name: style
-          in: query
-          required: false
-          schema:
-            type: string
-            enum: [simplified_ar, egyptian_ar, en]
-            default: simplified_ar
+        - $ref: '#/components/parameters/SurahId'
+        - $ref: '#/components/parameters/Style'
       responses:
         '200':
-          description: List of published explanations
+          description: Published explanations for the exact style, possibly empty.
           content:
             application/json:
               schema:
                 type: array
                 items:
                   $ref: '#/components/schemas/Explanation'
+        '202':
+          $ref: '#/components/responses/Processing'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/Unavailable'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+  /surahs/{surahId}/introduction:
+    get:
+      operationId: getSurahIntroduction
+      tags: [content]
+      summary: Get the published introduction for a surah and style
+      description: |
+        Returns the published introduction for the exact requested style. A
+        pending or processing introduction returns `202`; a missing or
+        unpublished-for-this-style introduction returns `404`. Internal fields
+        are never exposed, and a missing style never falls back to another
+        style.
+      parameters:
+        - $ref: '#/components/parameters/SurahId'
+        - $ref: '#/components/parameters/Style'
+      responses:
+        '200':
+          description: Published introduction for the exact requested style.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Introduction'
+        '202':
+          $ref: '#/components/responses/Processing'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/Unavailable'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
   /reciters:
     get:
+      operationId: listReciters
+      tags: [audio]
       summary: Get available reciters
       responses:
         '200':
-          description: List of reciters
+          description: List of reciters.
           content:
             application/json:
               schema:
                 type: array
                 items:
                   $ref: '#/components/schemas/Reciter'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
   /surahs/{surahId}/recitations:
     get:
-      summary: Get recitations for a surah
+      operationId: listSurahRecitations
+      tags: [audio]
+      summary: Get recitations for a surah and reciter
+      description: |
+        Returns per-ayah audio metadata in ayah order for one reciter. Audio
+        files are not stored in MongoDB, only their references. An empty `200`
+        means the reciter exists but has no audio for this surah; `404` means
+        audio for this surah/reciter is unavailable. External audio URLs are for
+        internal testing only until rights are resolved; this API does not grant
+        download or redistribution rights.
       parameters:
-        - name: surahId
-          in: path
-          required: true
-          schema:
-            type: integer
-        - name: reciter
-          in: query
-          required: false
-          schema:
-            type: string
+        - $ref: '#/components/parameters/SurahId'
+        - $ref: '#/components/parameters/Reciter'
       responses:
         '200':
-          description: List of recitations
+          description: List of recitations in ayah order, possibly empty.
           content:
             application/json:
               schema:
                 type: array
                 items:
                   $ref: '#/components/schemas/Recitation'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/Unavailable'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
 components:
+  parameters:
+    SurahId:
+      name: surahId
+      in: path
+      required: true
+      description: Canonical surah number, 1-114.
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 114
+    Style:
+      name: style
+      in: query
+      required: false
+      description: |
+        Exact content style. Defaults to `simplified_ar`. Missing content for the
+        requested style is never substituted with another style.
+      schema:
+        $ref: '#/components/schemas/StyleId'
+    Reciter:
+      name: reciter
+      in: query
+      required: true
+      description: Reciter ID from `GET /reciters`.
+      schema:
+        type: string
+        minLength: 1
+
+  responses:
+    BadRequest:
+      description: Invalid path or query parameter.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Processing:
+      description: Content is being generated or reviewed; retry later.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ProcessingStatus'
+    Unavailable:
+      description: |
+        No content exists for the exact requested surah/style. This is not an
+        error and must never be rendered as another style's content.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/UnavailableStatus'
+    ServerError:
+      description: The API failed to serve the request.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
   schemas:
+    Health:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [ok]
+      additionalProperties: false
+
+    Readiness:
+      type: string
+      enum: [available, processing, unavailable]
+      description: |
+        `available` means the content can be served now. `processing` means
+        generation/review is in progress. `unavailable` means no content exists
+        for the exact selection. Ayah text cannot be `processing`.
+
+    ReadinessByStyle:
+      type: object
+      description: Readiness for each canonical style.
+      required: [simplified_ar, egyptian_ar, en]
+      properties:
+        simplified_ar:
+          $ref: '#/components/schemas/Readiness'
+        egyptian_ar:
+          $ref: '#/components/schemas/Readiness'
+        en:
+          $ref: '#/components/schemas/Readiness'
+      additionalProperties:
+        $ref: '#/components/schemas/Readiness'
+
+    SurahReadiness:
+      type: object
+      required: [ayah_text, introduction, audio, explanations]
+      properties:
+        ayah_text:
+          $ref: '#/components/schemas/Readiness'
+        introduction:
+          $ref: '#/components/schemas/ReadinessByStyle'
+        audio:
+          $ref: '#/components/schemas/Readiness'
+        explanations:
+          $ref: '#/components/schemas/ReadinessByStyle'
+      additionalProperties: false
+
+    Revelation:
+      type: object
+      required: [classification]
+      properties:
+        classification:
+          type: string
+          enum: [meccan, medinan, unknown]
+        source:
+          type: string
+          description: |
+            Named source supporting a non-unknown classification. Classification
+            must be `unknown` or omitted when no named source supports it.
+      description: |
+        Optional attributed revelation classification. Disputed values must be
+        flagged or marked `unknown`, never silently chosen.
+      additionalProperties: false
+
+    Surah:
+      type: object
+      required: [number, name_arabic, name_transliteration, ayah_count, readiness]
+      properties:
+        number:
+          type: integer
+          minimum: 1
+          maximum: 114
+        name_arabic:
+          type: string
+          minLength: 1
+          description: Arabic surah name from a named metadata source.
+        name_transliteration:
+          type: string
+          minLength: 1
+          description: Latin transliteration from a named metadata source.
+        ayah_count:
+          type: integer
+          minimum: 1
+        revelation:
+          $ref: '#/components/schemas/Revelation'
+        readiness:
+          $ref: '#/components/schemas/SurahReadiness'
+      additionalProperties: false
+
     Ayah:
       type: object
       required: [id, surah_id, ayah_number, text_uthmani]
@@ -99,16 +397,33 @@ components:
           type: string
         surah_id:
           type: integer
+          minimum: 1
+          maximum: 114
         ayah_number:
           type: integer
+          minimum: 1
         text_uthmani:
           type: string
         text_simple:
           type: string
+          description: Normalized search-only text; never displayed as the Quran.
         corpus_version:
           type: string
         content_hash:
           type: string
+      description: |
+        A verified Uthmani ayah. `text_simple` is search-only. No review or
+        source-version internal fields are exposed.
+      additionalProperties: false
+
+    StyleId:
+      type: string
+      enum: [simplified_ar, egyptian_ar, en]
+      default: simplified_ar
+      description: |
+        Canonical style ID. `en` is an English explanation grounded in tafsir,
+        not an authenticated Quran translation.
+
     Explanation:
       type: object
       required: [id, surah_id, ayah_start, ayah_end, style, level, text, source_refs]
@@ -117,21 +432,122 @@ components:
           type: string
         surah_id:
           type: integer
+          minimum: 1
+          maximum: 114
         ayah_start:
           type: integer
+          minimum: 1
+          description: First ayah covered, inclusive.
         ayah_end:
           type: integer
+          minimum: 1
+          description: Last ayah covered, inclusive; never less than ayah_start.
         style:
-          type: string
+          $ref: '#/components/schemas/StyleId'
         level:
           type: string
+          enum: [beginner, tadabbur, advanced]
         text:
           type: string
         source_refs:
           type: array
           items:
             type: string
-      description: review_status and source_version_snapshot are never exposed
+      description: |
+        Review status and source-version snapshot are never exposed. A multi-ayah
+        explanation uses the inclusive `ayah_start`/`ayah_end` range.
+      additionalProperties: false
+
+    Introduction:
+      type: object
+      required: [id, surah_id, style, level, sections, source_refs, attributions]
+      properties:
+        id:
+          type: string
+        surah_id:
+          type: integer
+          minimum: 1
+          maximum: 114
+        style:
+          $ref: '#/components/schemas/StyleId'
+        level:
+          type: string
+          enum: [beginner, tadabbur, advanced]
+        sections:
+          type: array
+          items:
+            $ref: '#/components/schemas/IntroductionSection'
+        source_refs:
+          type: array
+          items:
+            type: string
+        attributions:
+          type: array
+          items:
+            $ref: '#/components/schemas/SourceAttribution'
+        differing_reports:
+          type: array
+          items:
+            $ref: '#/components/schemas/Claim'
+      description: |
+        Published introduction only. Review status, source-version snapshot,
+        prompt/model versions, timestamps and reviewer identity are never
+        exposed.
+      additionalProperties: false
+
+    IntroductionSection:
+      type: object
+      required: [type, title, content, source_refs, claims]
+      properties:
+        type:
+          type: string
+          enum: [classification, context, themes, stories, asbab]
+        title:
+          type: string
+        content:
+          type: string
+        source_refs:
+          type: array
+          items:
+            type: string
+        claims:
+          type: array
+          items:
+            $ref: '#/components/schemas/Claim'
+      additionalProperties: false
+
+    Claim:
+      type: object
+      required: [text, source_refs]
+      properties:
+        text:
+          type: string
+        source_refs:
+          type: array
+          items:
+            type: string
+      additionalProperties: false
+
+    SourceAttribution:
+      type: object
+      required: [source_id, title, author, source_version, source_refs]
+      properties:
+        source_id:
+          type: string
+        title:
+          type: string
+        author:
+          type: string
+        edition:
+          type: string
+        source_version:
+          type: string
+        source_refs:
+          type: array
+          items:
+            type: string
+      additionalProperties: false
+
     Reciter:
       type: object
       required: [id, name]
@@ -142,6 +558,8 @@ components:
           type: string
         style_note:
           type: string
+      additionalProperties: false
+
     Recitation:
       type: object
       required: [id, reciter_id, surah_id, ayah_number, audio_url]
@@ -152,32 +570,40 @@ components:
           type: string
         surah_id:
           type: integer
+          minimum: 1
+          maximum: 114
         ayah_number:
           type: integer
+          minimum: 1
         audio_url:
           type: string
         duration_seconds:
           type: number
+          minimum: 0
+      additionalProperties: false
 
-  /surahs/{surahId}/introduction:
-    get:
-      summary: Get published introduction for a surah
-      description: Only returns published introductions. Internal fields not exposed.
-      parameters:
-        - name: surahId
-          in: path
-          required: true
-          schema:
-            type: integer
-        - name: style
-          in: query
-          required: false
-          schema:
-            type: string
-      responses:
-        '200':
-          description: Published introduction
-        '404':
-          description: Introduction not found or not published
-        '400':
-          description: Invalid surah id
+    ProcessingStatus:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [processing]
+      additionalProperties: false
+
+    UnavailableStatus:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [unavailable]
+      additionalProperties: false
+
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+      additionalProperties: false

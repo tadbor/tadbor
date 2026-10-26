@@ -1,0 +1,11 @@
+[
+  {
+    "id": "fixture-reciter-1",
+    "name": "FIXTURE Reciter One",
+    "style_note": "FIXTURE style note"
+  },
+  {
+    "id": "fixture-reciter-2",
+    "name": "FIXTURE Reciter Two"
+  }
+]

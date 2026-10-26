@@ -1,0 +1,146 @@
+[
+  {
+    "name": "health",
+    "operationId": "getHealth",
+    "status": 200,
+    "file": "health.json"
+  },
+  {
+    "name": "surahs cover every readiness state for every content type",
+    "operationId": "listSurahs",
+    "status": 200,
+    "file": "surahs.json"
+  },
+  {
+    "name": "ayah text available",
+    "operationId": "getSurahAyahs",
+    "status": 200,
+    "file": "ayahs_available.json"
+  },
+  {
+    "name": "ayah text unavailable",
+    "operationId": "getSurahAyahs",
+    "status": 404,
+    "file": "ayahs_unavailable.json"
+  },
+  {
+    "name": "ayah text invalid request",
+    "operationId": "getSurahAyahs",
+    "status": 400,
+    "file": "error_invalid_request.json"
+  },
+  {
+    "name": "ayah text server error",
+    "operationId": "getSurahAyahs",
+    "status": 500,
+    "file": "error_server.json"
+  },
+  {
+    "name": "explanations available",
+    "operationId": "listSurahExplanations",
+    "status": 200,
+    "file": "explanations_available.json"
+  },
+  {
+    "name": "explanations empty style",
+    "operationId": "listSurahExplanations",
+    "status": 200,
+    "file": "explanations_empty.json"
+  },
+  {
+    "name": "explanations processing",
+    "operationId": "listSurahExplanations",
+    "status": 202,
+    "file": "explanations_processing.json"
+  },
+  {
+    "name": "explanations unavailable",
+    "operationId": "listSurahExplanations",
+    "status": 404,
+    "file": "explanations_unavailable.json"
+  },
+  {
+    "name": "explanations invalid request",
+    "operationId": "listSurahExplanations",
+    "status": 400,
+    "file": "error_invalid_request.json"
+  },
+  {
+    "name": "explanations server error",
+    "operationId": "listSurahExplanations",
+    "status": 500,
+    "file": "error_server.json"
+  },
+  {
+    "name": "introduction available",
+    "operationId": "getSurahIntroduction",
+    "status": 200,
+    "file": "introduction_available.json"
+  },
+  {
+    "name": "introduction processing",
+    "operationId": "getSurahIntroduction",
+    "status": 202,
+    "file": "introduction_processing.json"
+  },
+  {
+    "name": "introduction unavailable",
+    "operationId": "getSurahIntroduction",
+    "status": 404,
+    "file": "introduction_unavailable.json"
+  },
+  {
+    "name": "introduction invalid request",
+    "operationId": "getSurahIntroduction",
+    "status": 400,
+    "file": "error_invalid_request.json"
+  },
+  {
+    "name": "introduction server error",
+    "operationId": "getSurahIntroduction",
+    "status": 500,
+    "file": "error_server.json"
+  },
+  {
+    "name": "reciters",
+    "operationId": "listReciters",
+    "status": 200,
+    "file": "reciters.json"
+  },
+  {
+    "name": "reciters server error",
+    "operationId": "listReciters",
+    "status": 500,
+    "file": "error_server.json"
+  },
+  {
+    "name": "recitations available",
+    "operationId": "listSurahRecitations",
+    "status": 200,
+    "file": "recitations_available.json"
+  },
+  {
+    "name": "recitations empty for reciter",
+    "operationId": "listSurahRecitations",
+    "status": 200,
+    "file": "recitations_empty.json"
+  },
+  {
+    "name": "recitations unavailable",
+    "operationId": "listSurahRecitations",
+    "status": 404,
+    "file": "recitations_unavailable.json"
+  },
+  {
+    "name": "recitations invalid request",
+    "operationId": "listSurahRecitations",
+    "status": 400,
+    "file": "error_invalid_request.json"
+  },
+  {
+    "name": "recitations server error",
+    "operationId": "listSurahRecitations",
+    "status": 500,
+    "file": "error_server.json"
+  }
+]

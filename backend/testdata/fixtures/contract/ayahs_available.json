@@ -1,0 +1,20 @@
+[
+  {
+    "id": "fixture-12-1",
+    "surah_id": 12,
+    "ayah_number": 1,
+    "text_uthmani": "FIXTURE ayah 1 - not Quranic text",
+    "text_simple": "fixture ayah 1",
+    "corpus_version": "fixture-2026-10-25",
+    "content_hash": "sha256:fixture-12-1"
+  },
+  {
+    "id": "fixture-12-2",
+    "surah_id": 12,
+    "ayah_number": 2,
+    "text_uthmani": "FIXTURE ayah 2 - not Quranic text",
+    "text_simple": "fixture ayah 2",
+    "corpus_version": "fixture-2026-10-25",
+    "content_hash": "sha256:fixture-12-2"
+  }
+]
