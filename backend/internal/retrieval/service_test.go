@@ -4,9 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
 	"testing"
 	"time"
+
+	"tadbor/backend/internal/mongotest"
 
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -15,10 +16,7 @@ import (
 
 func testDB(t *testing.T) *mongo.Database {
 	t.Helper()
-	uri := os.Getenv("MONGO_TEST_URI")
-	if uri == "" {
-		t.Skip("set MONGO_TEST_URI to run MongoDB-backed retrieval tests")
-	}
+	uri := mongotest.URI(t)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()

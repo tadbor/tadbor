@@ -6,7 +6,7 @@ import SurahScreen from "./src/screens/SurahScreen";
 export default function App() {
   return (
     <SafeAreaProvider>
-      <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
+      <StatusBar barStyle="dark-content" />
       <SafeAreaView style={{ flex: 1, backgroundColor: "#FFFFFF" }} edges={["top", "bottom"]}>
         <SurahScreen surahId={12} />
       </SafeAreaView>

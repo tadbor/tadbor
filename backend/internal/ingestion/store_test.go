@@ -3,10 +3,11 @@ package ingestion
 import (
 	"context"
 	"fmt"
-	"os"
 	"strings"
 	"testing"
 	"time"
+
+	"tadbor/backend/internal/mongotest"
 
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -16,16 +17,14 @@ import (
 // testDB connects to an explicitly-provided MongoDB and gives each test its own
 // database, dropped afterwards.
 //
-// These tests are skipped unless MONGO_TEST_URI is set, so `go test ./...` stays
-// hermetic and can never write to a developer's working database:
+// Locally these tests are skipped unless MONGO_TEST_URI is set, so `go test ./...`
+// stays hermetic and can never write to a developer's working database. CI must
+// set MONGO_TEST_URI and fails instead of skipping:
 //
 //	MONGO_TEST_URI="mongodb://tadbor:...@localhost:27017" go test ./internal/ingestion/
 func testDB(t *testing.T) *mongo.Database {
 	t.Helper()
-	uri := os.Getenv("MONGO_TEST_URI")
-	if uri == "" {
-		t.Skip("set MONGO_TEST_URI to run MongoDB-backed ingestion tests")
-	}
+	uri := mongotest.URI(t)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()

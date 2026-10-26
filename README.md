@@ -49,6 +49,29 @@ to run it against the same backend.
 make mobile
 ```
 
+## CI
+
+`.github/workflows/ci.yml` runs on every push and pull request to `main`:
+
+- **Backend:** API contract validation, `go build ./...`, `go vet ./...`, and
+  `go test ./... -count=1` against a disposable MongoDB 7 service container.
+- **Web:** TypeScript typecheck and production build.
+- **Mobile:** TypeScript typecheck.
+
+Mongo-backed tests skip locally when `MONGO_TEST_URI` is unset, but fail rather
+than skip in CI. To reproduce the backend suite with a throwaway database:
+
+```bash
+docker run --rm -d --name tadbor-test-mongo -p 27018:27017 mongo:7
+cd backend
+CI=true MONGO_TEST_URI='mongodb://localhost:27018/?directConnection=true' \
+  go test ./... -count=1
+docker stop tadbor-test-mongo
+```
+
+Never point `MONGO_TEST_URI` at production or a working database; CI uses an
+ephemeral service container that is discarded with the job.
+
 ## Repo layout
 
 ```

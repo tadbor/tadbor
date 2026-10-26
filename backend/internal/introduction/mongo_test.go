@@ -3,11 +3,11 @@ package introduction
 import (
 	"context"
 	"fmt"
-	"os"
 	"testing"
 	"time"
 
 	"tadbor/backend/internal/content"
+	"tadbor/backend/internal/mongotest"
 
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
@@ -17,10 +17,7 @@ import (
 
 func mongoIntroductionTestDB(t *testing.T) *mongo.Database {
 	t.Helper()
-	uri := os.Getenv("MONGO_TEST_URI")
-	if uri == "" {
-		t.Skip("set MONGO_TEST_URI to run MongoDB-backed introduction workflow tests")
-	}
+	uri := mongotest.URI(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	client, err := mongo.Connect(ctx, options.Client().ApplyURI(uri))

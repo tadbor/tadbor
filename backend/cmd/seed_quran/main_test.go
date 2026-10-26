@@ -4,16 +4,15 @@ import (
 	"context"
 	"errors"
 	"net/http"
-	"os"
 	"strings"
+	"testing"
 	"time"
 
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 
+	"tadbor/backend/internal/mongotest"
 	"tadbor/backend/internal/quran"
-
-	"testing"
 )
 
 func TestSearchFold(t *testing.T) {
@@ -176,23 +175,19 @@ func TestVerifyMarksCrossCheckSkippedWhenSourcesUnavailable(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	uri := os.Getenv("MONGO_TEST_URI")
-	if uri == "" {
-		uri = "mongodb://tadbor:tadbor_dev_password@localhost:27017"
-	}
+	uri := mongotest.URI(t)
 	client, err := mongo.Connect(ctx, options.Client().ApplyURI(uri))
 	if err != nil {
-		t.Skipf("mongo unavailable: %v", err)
+		t.Fatalf("mongo connect: %v", err)
 	}
 	defer client.Disconnect(context.Background())
 
-	// mongo.Connect is lazy: it returns before proving the server is
-	// reachable. Ping briefly so a CI runner without MongoDB skips instead of
-	// blocking until the 30s test timeout.
+	// mongo.Connect is lazy: it returns before proving the server is reachable.
+	// Ping so a bad URI or a missing CI service fails loudly.
 	pingCtx, pingCancel := context.WithTimeout(ctx, 3*time.Second)
 	defer pingCancel()
 	if err := client.Ping(pingCtx, nil); err != nil {
-		t.Skipf("mongo unavailable: %v", err)
+		t.Fatalf("mongo unavailable: %v", err)
 	}
 
 	verdicts, _, err := verify(ctx, client.Database("tadbor"), 12)

@@ -4,9 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
 	"testing"
 	"time"
+
+	"tadbor/backend/internal/mongotest"
 
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -14,16 +15,14 @@ import (
 )
 
 // testDB mirrors internal/ingestion's helper: a per-test database, dropped
-// afterwards, and skipped entirely unless MONGO_TEST_URI is set so `go test ./...`
-// can never touch a working database.
+// afterwards. Locally it is skipped unless MONGO_TEST_URI is set so
+// `go test ./...` can never touch a working database; in CI it fails instead of
+// skipping.
 //
 //	MONGO_TEST_URI="mongodb://tadbor:...@localhost:27017" go test ./internal/review/
 func testDB(t *testing.T) *mongo.Database {
 	t.Helper()
-	uri := os.Getenv("MONGO_TEST_URI")
-	if uri == "" {
-		t.Skip("set MONGO_TEST_URI to run MongoDB-backed review tests")
-	}
+	uri := mongotest.URI(t)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
