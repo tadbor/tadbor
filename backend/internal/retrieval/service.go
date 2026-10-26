@@ -9,6 +9,7 @@ import (
 
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 
 	"tadbor/backend/internal/embedding"
 )
@@ -30,15 +31,22 @@ const thematicTopK = 5
 // enough and avoids adding Atlas as a dependency. Revisit only if the corpus
 // grows to the point this becomes measurably slow — see Part 2 §31.
 type TafsirChunk struct {
-	ID             string    `bson:"_id" json:"id"`
-	SourceID       string    `bson:"source_id" json:"source_id"`
-	SourceVerified bool      `bson:"source_verified" json:"-"`
-	Text           string    `bson:"text" json:"text"`
-	Embedding      []float64 `bson:"embedding" json:"-"`
-	SurahID        int       `bson:"surah_id" json:"surah_id"`
-	AyahStart      int       `bson:"ayah_start" json:"ayah_start"`
-	AyahEnd        int       `bson:"ayah_end" json:"ayah_end"`
-	MappingType    string    `bson:"mapping_type" json:"mapping_type"` // single_ayah | multi_ayah | surah_level | thematic
+	ID                string    `bson:"_id" json:"id"`
+	SourceID          string    `bson:"source_id" json:"source_id"`
+	SourceVersion     string    `bson:"source_version" json:"source_version"`
+	SourceVersionHash string    `bson:"source_version_hash" json:"source_version_hash"`
+	ContentHash       string    `bson:"content_hash" json:"content_hash"`
+	SourceVerified    bool      `bson:"source_verified" json:"-"`
+	Text              string    `bson:"text" json:"text"`
+	Embedding         []float64 `bson:"embedding" json:"-"`
+	SurahID           int       `bson:"surah_id" json:"surah_id"`
+	AyahStart         int       `bson:"ayah_start" json:"ayah_start"`
+	AyahEnd           int       `bson:"ayah_end" json:"ayah_end"`
+	MappingType       string    `bson:"mapping_type" json:"mapping_type"` // single_ayah | multi_ayah | surah_level | thematic
+}
+
+func verifiedSurahFilter(surahID int) bson.M {
+	return bson.M{"surah_id": surahID, "source_verified": true}
 }
 
 type Service struct {
@@ -59,6 +67,21 @@ func NewService(db *mongo.Database, embedder embedding.Embedder) *Service {
 		ayahs:    db.Collection("ayahs"),
 		embedder: embedder,
 	}
+}
+
+func (s *Service) GetVerifiedSurahEvidence(ctx context.Context, surahID int) ([]TafsirChunk, error) {
+	cur, err := s.chunks.Find(ctx, verifiedSurahFilter(surahID),
+		options.Find().SetSort(bson.D{{Key: "ayah_start", Value: 1}, {Key: "_id", Value: 1}}),
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer cur.Close(ctx)
+	var chunks []TafsirChunk
+	if err := cur.All(ctx, &chunks); err != nil {
+		return nil, err
+	}
+	return chunks, nil
 }
 
 // GetEvidence implements the retrieval sequence from Part 1 §11:

@@ -51,6 +51,40 @@ export type QueueItem = {
   grounding_version_mismatch: boolean;
 };
 
+export type IntroductionClaim = { text: string; source_refs: string[] };
+export type IntroductionSection = {
+  type: string;
+  title: string;
+  content: string;
+  source_refs: string[];
+  claims: IntroductionClaim[];
+};
+export type IntroductionQueueItem = {
+  id: string;
+  surah_id: number;
+  style: string;
+  level: string;
+  sections: IntroductionSection[];
+  source_refs: string[];
+  differing_reports: IntroductionClaim[];
+  review_status: string;
+  source_version_snapshot: string;
+  prompt_version: string;
+  model_version: string;
+  evidence: {
+    chunk_id: string;
+    text: string;
+    source_id: string;
+    source_version: string;
+    content_hash: string;
+    source_title: string;
+    source_author: string;
+    source_edition?: string;
+  }[];
+  missing_refs: string[];
+  review_block_reason?: string;
+};
+
 export type Decision = "approve" | "edit_approve" | "reject" | "escalate";
 
 function apiUrl(): string {
@@ -79,6 +113,33 @@ export async function fetchQueue(password: string): Promise<QueueItem[]> {
   return body.map(normalizeItem);
 }
 
+export async function fetchIntroductionQueue(password: string): Promise<IntroductionQueueItem[]> {
+  const res = await call("/internal/review/introductions", {}, password);
+  if (res.status === 401) throw new AuthError();
+  if (!res.ok) throw new Error(`introduction review queue: ${res.status} ${await res.text()}`);
+  const body: unknown = await res.json().catch(() => null);
+  if (!Array.isArray(body)) throw new Error("introduction review queue: response was not a list");
+  const rows = body as Record<string, unknown>[];
+  return rows.map((item) => ({
+    ...item,
+    sections: asArray<Record<string, unknown>>(item.sections).map((section) => ({
+      ...section,
+      source_refs: asArray<string>(section.source_refs),
+      claims: asArray<Record<string, unknown>>(section.claims).map((claim) => ({
+        ...claim,
+        source_refs: asArray<string>(claim.source_refs),
+      })),
+    })),
+    source_refs: asArray<string>(item.source_refs),
+    differing_reports: asArray<Record<string, unknown>>(item.differing_reports).map((claim) => ({
+      ...claim,
+      source_refs: asArray<string>(claim.source_refs),
+    })),
+    evidence: asArray<IntroductionQueueItem["evidence"][number]>(item.evidence),
+    missing_refs: asArray<string>(item.missing_refs),
+  })) as unknown as IntroductionQueueItem[];
+}
+
 // Go serialises a nil slice as null, so an explanation with no refs arrives with
 // `missing_refs: null` rather than `[]`. The page does `.length` and `.map` on
 // both, and an explanation with nothing to cite is exactly the case that must not
@@ -92,8 +153,8 @@ function normalizeItem(item: QueueItem): QueueItem {
   };
 }
 
-function asArray<T>(value: T[] | null | undefined): T[] {
-  return Array.isArray(value) ? value : [];
+function asArray<T>(value: unknown): T[] {
+  return Array.isArray(value) ? (value as T[]) : [];
 }
 
 export async function postDecision(

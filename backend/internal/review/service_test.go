@@ -376,3 +376,134 @@ func TestEmptyQueueIsEmptyNotNull(t *testing.T) {
 		t.Errorf("queue length = %d, want 0", len(queue))
 	}
 }
+
+func seedPendingIntroduction(t *testing.T, db *mongo.Database) {
+	t.Helper()
+	ctx := context.Background()
+	if _, err := db.Collection("sources").InsertOne(ctx, bson.M{
+		"_id": "verified-source", "title": "Verified source", "author": "Author",
+		"verification_status": "verified", "licensing_status": "cleared", "current_version": "source-v1",
+	}); err != nil {
+		t.Fatalf("seed source: %v", err)
+	}
+	if _, err := db.Collection("source_versions").InsertOne(ctx, bson.M{
+		"_id": "source-v1", "source_id": "verified-source", "content_hash": "source-hash",
+	}); err != nil {
+		t.Fatalf("seed source version: %v", err)
+	}
+	if _, err := db.Collection("tafsir_chunks").InsertOne(ctx, bson.M{
+		"_id": "chunk-1", "source_id": "verified-source", "source_version": "source-v1",
+		"source_version_hash": "source-hash", "source_verified": true,
+		"content_hash": "chunk-hash", "text": "controlled verified source fixture",
+	}); err != nil {
+		t.Fatalf("seed chunk: %v", err)
+	}
+	if _, err := db.Collection("surah_introductions").InsertOne(ctx, bson.M{
+		"_id": "intro-12", "surah_id": 12, "style": "simplified_ar", "level": "beginner",
+		"sections": []bson.M{{"type": "themes", "title": "Themes", "content": "draft",
+			"source_refs": []string{"chunk-1"}, "claims": []bson.M{{"text": "Grounded claim", "source_refs": []string{"chunk-1"}}}}},
+		"source_refs": []string{"chunk-1"}, "differing_reports": []bson.M{},
+		"review_status": "pending", "source_version_snapshot": "source-v1",
+		"prompt_version": "prompt-v1", "model_version": "test-model",
+	}); err != nil {
+		t.Fatalf("seed introduction: %v", err)
+	}
+}
+
+func TestDecideIntroductionPublishesOnlyAfterChecklistAndWritesAudit(t *testing.T) {
+	db := testDB(t)
+	seedPendingIntroduction(t, db)
+	svc := NewService(db)
+
+	if err := svc.DecideIntroduction(context.Background(), "intro-12", "reviewer", "approve", "verified claims", completeChecklist()); err != nil {
+		t.Fatalf("DecideIntroduction: %v", err)
+	}
+	var intro bson.M
+	if err := db.Collection("surah_introductions").FindOne(context.Background(), bson.M{"_id": "intro-12"}).Decode(&intro); err != nil {
+		t.Fatalf("read introduction: %v", err)
+	}
+	if intro["review_status"] != "published" {
+		t.Fatalf("review_status = %v, want published", intro["review_status"])
+	}
+	var audit ReviewRecord
+	if err := db.Collection("reviews").FindOne(context.Background(), bson.M{"introduction_id": "intro-12"}).Decode(&audit); err != nil {
+		t.Fatalf("read review audit: %v", err)
+	}
+	if audit.ContentType != "surah_introduction" || audit.Decision != "approve" || audit.ReviewerID != "reviewer" {
+		t.Fatalf("review audit = %+v", audit)
+	}
+}
+
+func TestDecideIntroductionRefusesIncompleteChecklist(t *testing.T) {
+	db := testDB(t)
+	seedPendingIntroduction(t, db)
+	svc := NewService(db)
+	checklist := completeChecklist()
+	checklist.CitationsResolve = false
+
+	err := svc.DecideIntroduction(context.Background(), "intro-12", "reviewer", "approve", "", checklist)
+	if !errors.Is(err, ErrBadDecision) {
+		t.Fatalf("DecideIntroduction error = %v, want ErrBadDecision", err)
+	}
+	var intro bson.M
+	if err := db.Collection("surah_introductions").FindOne(context.Background(), bson.M{"_id": "intro-12"}).Decode(&intro); err != nil {
+		t.Fatalf("read introduction: %v", err)
+	}
+	if intro["review_status"] != "pending" {
+		t.Fatalf("review_status = %v, want pending", intro["review_status"])
+	}
+	if count, err := db.Collection("reviews").CountDocuments(context.Background(), bson.M{"introduction_id": "intro-12"}); err != nil || count != 0 {
+		t.Fatalf("review audit count = %d, err=%v; want 0", count, err)
+	}
+}
+
+func TestDecideIntroductionRefusesSourceDowngrade(t *testing.T) {
+	db := testDB(t)
+	seedPendingIntroduction(t, db)
+	if _, err := db.Collection("sources").UpdateOne(context.Background(), bson.M{"_id": "verified-source"}, bson.M{
+		"$set": bson.M{"verification_status": "unverified"},
+	}); err != nil {
+		t.Fatalf("downgrade source: %v", err)
+	}
+
+	err := NewService(db).DecideIntroduction(context.Background(), "intro-12", "reviewer", "approve", "", completeChecklist())
+	if !errors.Is(err, ErrBadDecision) {
+		t.Fatalf("DecideIntroduction error = %v, want ErrBadDecision", err)
+	}
+	assertIntroductionRemainsPending(t, db)
+}
+
+func TestDecideIntroductionRefusesChangedPinnedVersion(t *testing.T) {
+	db := testDB(t)
+	seedPendingIntroduction(t, db)
+	if _, err := db.Collection("source_versions").InsertOne(context.Background(), bson.M{
+		"_id": "source-v2", "source_id": "verified-source", "content_hash": "new-source-hash",
+	}); err != nil {
+		t.Fatalf("seed newer source version: %v", err)
+	}
+	if _, err := db.Collection("sources").UpdateOne(context.Background(), bson.M{"_id": "verified-source"}, bson.M{
+		"$set": bson.M{"current_version": "source-v2"},
+	}); err != nil {
+		t.Fatalf("advance source version: %v", err)
+	}
+
+	err := NewService(db).DecideIntroduction(context.Background(), "intro-12", "reviewer", "approve", "", completeChecklist())
+	if !errors.Is(err, ErrBadDecision) {
+		t.Fatalf("DecideIntroduction error = %v, want ErrBadDecision", err)
+	}
+	assertIntroductionRemainsPending(t, db)
+}
+
+func assertIntroductionRemainsPending(t *testing.T, db *mongo.Database) {
+	t.Helper()
+	var intro bson.M
+	if err := db.Collection("surah_introductions").FindOne(context.Background(), bson.M{"_id": "intro-12"}).Decode(&intro); err != nil {
+		t.Fatalf("read introduction: %v", err)
+	}
+	if intro["review_status"] != "pending" {
+		t.Fatalf("review_status = %v, want pending", intro["review_status"])
+	}
+	if count, err := db.Collection("reviews").CountDocuments(context.Background(), bson.M{"introduction_id": "intro-12"}); err != nil || count != 0 {
+		t.Fatalf("review audit count = %d, err=%v; want 0", count, err)
+	}
+}

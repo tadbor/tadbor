@@ -89,6 +89,10 @@ func checkScript(style, content string) error {
 	return fmt.Errorf("no script rule for target style %q — add one before generating in that style", style)
 }
 
+func ValidateTargetScript(style, content string) error {
+	return checkScript(style, content)
+}
+
 // countScripts counts letters by script and ignores everything else. Punctuation,
 // whitespace, digits and Quranic annotation marks are not evidence of a
 // language either way: Arabic explanations legitimately contain Latin digits,

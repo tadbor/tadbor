@@ -1,6 +1,7 @@
 package review
 
 import (
+	"context"
 	"errors"
 	"net/http"
 
@@ -44,5 +45,28 @@ func RegisterRoutes(group *gin.RouterGroup, svc *Service) {
 		default:
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		}
+	})
+
+	RegisterIntroductionRoutes(group, svc)
+}
+
+type IntroductionReviewer interface {
+	PendingIntroductions(context.Context) ([]IntroductionQueueItem, error)
+}
+
+func RegisterIntroductionRoutes(group *gin.RouterGroup, svc IntroductionReviewer) {
+	group.GET("/review/introductions", func(c *gin.Context) {
+		items, err := svc.PendingIntroductions(c.Request.Context())
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusOK, items)
+	})
+
+	group.POST("/review/introductions/:introductionId/decision", func(c *gin.Context) {
+		c.JSON(http.StatusServiceUnavailable, gin.H{
+			"error": "introduction decisions are disabled until a trusted reviewer identity provider is configured",
+		})
 	})
 }

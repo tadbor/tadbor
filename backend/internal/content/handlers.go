@@ -2,16 +2,21 @@ package content
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
-	"go.mongodb.org/mongo-driver/mongo"
 )
 
 // ExplanationReader is the read surface for the public explanation route.
 type ExplanationReader interface {
 	GetExplanations(ctx context.Context, surahID int, style string) ([]Explanation, error)
+}
+
+// IntroductionReader is the read surface for the public introduction route.
+type IntroductionReader interface {
+	GetIntroduction(ctx context.Context, surahID int, style string) (*SurahIntroduction, error)
 }
 
 func RegisterRoutes(router *gin.Engine, svc ExplanationReader) {
@@ -35,20 +40,25 @@ func RegisterRoutes(router *gin.Engine, svc ExplanationReader) {
 	})
 }
 
-func RegisterIntroductionRoutes(router *gin.Engine, svc *Service) {
+func RegisterIntroductionRoutes(router *gin.Engine, svc IntroductionReader) {
 	router.GET("/surahs/:surahId/introduction", func(c *gin.Context) {
 		surahID, err := strconv.Atoi(c.Param("surahId"))
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid surah id"})
 			return
 		}
-		intro, err := svc.GetIntroduction(c.Request.Context(), surahID)
+		style := c.DefaultQuery("style", "simplified_ar")
+		intro, err := svc.GetIntroduction(c.Request.Context(), surahID, style)
 		if err != nil {
-			if err == mongo.ErrNoDocuments {
-				c.JSON(http.StatusNotFound, gin.H{"status": "unavailable", "error": "introduction not available"})
+			if errors.Is(err, ErrIntroductionProcessing) {
+				c.JSON(http.StatusAccepted, gin.H{"status": "processing"})
 				return
 			}
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			if errors.Is(err, ErrIntroductionUnavailable) {
+				c.JSON(http.StatusNotFound, gin.H{"status": "unavailable"})
+				return
+			}
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "introduction service unavailable"})
 			return
 		}
 		c.JSON(http.StatusOK, intro)

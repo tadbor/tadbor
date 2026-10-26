@@ -128,6 +128,13 @@ func TestGetEvidenceWithoutQueryEmbeddingRefusesThematicChunks(t *testing.T) {
 	}
 }
 
+func TestVerifiedSurahFilterRequiresVerifiedSourceChunks(t *testing.T) {
+	filter := verifiedSurahFilter(12)
+	if filter["surah_id"] != 12 || filter["source_verified"] != true {
+		t.Fatalf("verified surah filter = %#v, want surah 12 and source_verified true", filter)
+	}
+}
+
 // An empty (non-nil) slice is the same "no query" case and must behave alike.
 func TestGetEvidenceWithEmptySliceRefusesThematicChunks(t *testing.T) {
 	db := testDB(t)

@@ -73,6 +73,50 @@ func TestGeminiUserPromptDelimitsEvidence(t *testing.T) {
 	}
 }
 
+func TestIntroductionTaskIsIncludedInPromptVersion(t *testing.T) {
+	found := false
+	for _, task := range knownTasks() {
+		if task == "introduce" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatal("introduction task brief is not included in PromptVersion fingerprint")
+	}
+}
+
+func TestIntroductionSchemaAndResponseUseTypedSections(t *testing.T) {
+	request := Request{Task: "introduce", TargetLanguage: "ar", TargetStyle: "simplified_ar", Evidence: testRequest().Evidence}
+	body, err := buildGeminiRequest(request)
+	if err != nil {
+		t.Fatalf("buildGeminiRequest: %v", err)
+	}
+	var payload map[string]any
+	if err := json.Unmarshal(body, &payload); err != nil {
+		t.Fatalf("decode request: %v", err)
+	}
+	config := payload["generationConfig"].(map[string]any)
+	schema := config["responseSchema"].(map[string]any)
+	properties := schema["properties"].(map[string]any)
+	if _, ok := properties["sections"]; !ok {
+		t.Fatal("introduction schema has no typed sections")
+	}
+	if _, ok := properties["differing_reports"]; !ok {
+		t.Fatal("introduction schema has no cited differing reports")
+	}
+
+	modelJSON := `{"sections":[{"type":"themes","title":"Themes","claims":[{"text":"Claim","source_refs":["1"]}]}],"differing_reports":[],"warnings":[],"confidence":"medium"}`
+	response := []byte(`{"candidates":[{"content":{"parts":[{"text":` + mustJSON(t, modelJSON) + `}]},"finishReason":"STOP"}]}`)
+	out, err := parseGeminiResponse(response)
+	if err != nil {
+		t.Fatalf("parseGeminiResponse: %v", err)
+	}
+	if len(out.Sections) != 1 || len(out.Sections[0].Claims) != 1 || out.Sections[0].Claims[0].SourceRefs[0] != "1" {
+		t.Fatalf("typed output = %+v", out)
+	}
+}
+
 func TestParseGeminiResponse(t *testing.T) {
 	modelJSON := `{"content":"c","source_refs":["s1"],"claims":["cl"],"warnings":[],"confidence":"high","requires_review":false}`
 	body := []byte(`{"candidates":[{"content":{"parts":[{"text":` + mustJSON(t, modelJSON) + `}]},"finishReason":"STOP"}]}`)

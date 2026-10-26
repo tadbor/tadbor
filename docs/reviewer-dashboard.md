@@ -74,6 +74,12 @@ for Supabase Auth. Replace it when a second reviewer exists, or when "who approv
 this" has to survive an audit — the cookie is the wrong place to keep a password
 once either is true.
 
+Introduction approval is therefore fail-closed: the authenticated shared
+password is not proof of reviewer identity or qualification. The introduction
+decision API returns 503 and the dashboard displays no approval controls until
+a trusted identity provider and reviewer authorization mapping are implemented.
+Do not supply a request-body `reviewer_id` as a substitute for verified identity.
+
 ## What changed in the backend to make this work
 
 The issue assumed the endpoints were ready. Three things were not:

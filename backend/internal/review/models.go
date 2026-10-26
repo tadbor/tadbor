@@ -1,5 +1,7 @@
 package review
 
+import "tadbor/backend/internal/content"
+
 // ReviewRecord mirrors the "reviews" collection — see
 // docs/rag-architecture-part2.md §23-24.
 type ReviewRecord struct {
@@ -20,7 +22,53 @@ type ReviewRecord struct {
 
 	// ModelVersion names the LLM that produced the text under review, so a bad
 	// generation run can be re-run rather than re-litigated verse by verse.
-	ModelVersion string `bson:"model_version,omitempty" json:"model_version,omitempty"`
+	ModelVersion   string `bson:"model_version,omitempty" json:"model_version,omitempty"`
+	ContentType    string `bson:"content_type,omitempty" json:"content_type,omitempty"`
+	IntroductionID string `bson:"introduction_id,omitempty" json:"introduction_id,omitempty"`
+}
+
+type IntroductionQueueItem struct {
+	ID                    string                 `bson:"_id" json:"id"`
+	SurahID               int                    `bson:"surah_id" json:"surah_id"`
+	Style                 string                 `bson:"style" json:"style"`
+	Level                 string                 `bson:"level" json:"level"`
+	Sections              []content.Section      `bson:"sections" json:"sections"`
+	SourceRefs            []string               `bson:"source_refs" json:"source_refs"`
+	DifferingReports      []content.Claim        `bson:"differing_reports" json:"differing_reports"`
+	ReviewStatus          string                 `bson:"review_status" json:"review_status"`
+	SourceVersionSnapshot string                 `bson:"source_version_snapshot" json:"source_version_snapshot"`
+	PromptVersion         string                 `bson:"prompt_version" json:"prompt_version"`
+	ModelVersion          string                 `bson:"model_version" json:"model_version"`
+	Evidence              []IntroductionEvidence `json:"evidence"`
+	MissingRefs           []string               `json:"missing_refs"`
+	ReviewBlockReason     string                 `json:"review_block_reason,omitempty"`
+}
+
+type IntroductionEvidence struct {
+	ChunkID           string `bson:"_id" json:"chunk_id"`
+	Text              string `bson:"text" json:"text"`
+	SourceID          string `bson:"source_id" json:"source_id"`
+	SourceVersion     string `bson:"source_version" json:"source_version"`
+	SourceVersionHash string `bson:"source_version_hash" json:"source_version_hash"`
+	ContentHash       string `bson:"content_hash" json:"content_hash"`
+	SourceTitle       string `json:"source_title"`
+	SourceAuthor      string `json:"source_author"`
+	SourceEdition     string `json:"source_edition,omitempty"`
+}
+
+type IntroductionChecklist struct {
+	ClaimsSupported       bool `json:"claims_supported"`
+	DisagreementsFair     bool `json:"disagreements_fair"`
+	NoQuranMisattribution bool `json:"no_quran_misattribution"`
+	ClassificationChecked bool `json:"classification_checked"`
+	HedgingChecked        bool `json:"hedging_checked"`
+	CitationsResolve      bool `json:"citations_resolve"`
+	CommentarySeparated   bool `json:"commentary_separated"`
+}
+
+func (c IntroductionChecklist) Complete() bool {
+	return c.ClaimsSupported && c.DisagreementsFair && c.NoQuranMisattribution &&
+		c.ClassificationChecked && c.HedgingChecked && c.CitationsResolve && c.CommentarySeparated
 }
 
 // QueueItem is one pending explanation as the dashboard needs it: the text, the

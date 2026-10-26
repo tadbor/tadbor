@@ -34,7 +34,9 @@ export async function reviewerPassword(): Promise<string | null> {
   return value;
 }
 
-// The name typed at login, used only to fill in reviewer_id on decisions.
+// Unverified display text used by the existing explanation review form. This
+// value is not an authenticated identity and is never used for introduction
+// approval, which remains disabled until trusted reviewer auth is configured.
 export async function reviewerName(): Promise<string> {
   return (await cookies()).get("tadbor_reviewer_name")?.value || "reviewer";
 }

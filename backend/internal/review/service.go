@@ -26,20 +26,22 @@ var (
 )
 
 type Service struct {
-	explanations *mongo.Collection
-	reviews      *mongo.Collection
-	chunks       *mongo.Collection
-	ayahs        *mongo.Collection
-	sources      *mongo.Collection
+	explanations  *mongo.Collection
+	introductions *mongo.Collection
+	reviews       *mongo.Collection
+	chunks        *mongo.Collection
+	ayahs         *mongo.Collection
+	sources       *mongo.Collection
 }
 
 func NewService(db *mongo.Database) *Service {
 	return &Service{
-		explanations: db.Collection("explanations"),
-		reviews:      db.Collection("reviews"),
-		chunks:       db.Collection("tafsir_chunks"),
-		ayahs:        db.Collection("ayahs"),
-		sources:      db.Collection("sources"),
+		explanations:  db.Collection("explanations"),
+		introductions: db.Collection("surah_introductions"),
+		reviews:       db.Collection("reviews"),
+		chunks:        db.Collection("tafsir_chunks"),
+		ayahs:         db.Collection("ayahs"),
+		sources:       db.Collection("sources"),
 	}
 }
 

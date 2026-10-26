@@ -1,5 +1,105 @@
 # Project Status and Plan for Tadbor
 
+> **Current audit update — 2026-10-25:** This section supersedes any conflicting
+> historical “current state” statements and proposed execution steps below.
+> The detailed sections that follow retain the original project plan and are
+> useful as design history, but they are not a substitute for the live audit in
+> [`PROJECT_STATUS.md`](PROJECT_STATUS.md).
+
+## Current Verified State
+
+- Checkout at audit: branch `main`, HEAD and `origin/main` at
+  `eeb9e0fa5b5b88a88a22817504065bd1c80f41fc`. The worktree contains local,
+  uncommitted backend, web, test, and documentation changes; preserve them.
+- Runtime architecture is Go/Gin + MongoDB, Next.js web, and Expo/React Native.
+  Docker Compose provides MongoDB only. No production deployment was verified.
+- Local checks for this audit: `cd backend && go test ./... -count=1`,
+  `cd backend && go build ./...`, `cd web && npm run build`, and
+  `git diff --check` passed. Direct `cd mobile && npx tsc --noEmit` failed at
+  `mobile/App.tsx:9` because the installed React Native `StatusBar` type does
+  not accept `backgroundColor`. CI masks the mobile typecheck failure with
+  `|| true`.
+- `MONGO_URI` and `MONGO_TEST_URI` were not configured. Mongo integration tests
+  were skipped; current database contents, source flags, published records,
+  recitations, indexes, and audit rows remain unverified.
+- Source verification records conflict: `corpus/sources/ibn-kathir-ar.json`
+  says `verified`, but `docs/reviews/ibn-kathir-ar-surah-12.md` describes an
+  “automated-pilot” review, says printed-edition provenance cannot be repeated,
+  and lists 19 entries requiring human review. Issue #30 is closed with a
+  comment claiming verification. Do not use the JSON flag alone as proof; a
+  qualified content owner must reconcile the evidence before trusting the
+  source.
+- The introduction API and Surah 12 generation pipeline are present in local
+  changes. Generation defaults to preview and the `-live` path writes drafts
+  as pending after provenance and structural validation. Semantic entailment
+  is not automated: resolved citations do not prove that the cited text
+  supports the claim.
+- Introduction approval is deliberately **disabled**. The internal decision
+  HTTP route returns `503`, and the dashboard has no approval controls, because
+  the current login is a shared password plus caller-entered display name, not
+  a trusted identity or reviewer qualification. A trusted identity provider
+  and explicit reviewer authorization mapping are prerequisites to enabling
+  approval. The direct service method and its Mongo tests do not make approval
+  reachable through the registered HTTP workflow.
+- Web contains an API-backed Surah reader but no verified library/discovery
+  route or public introduction view. It requests `simplified_ar` only. Mobile
+  mounts Surah 12 only; several controls are presentation-only, its style IDs
+  differ from backend IDs, and playback has not been device-tested.
+- Audio URLs and player code exist; EveryAyah licensing remains unresolved.
+  There is no offline/download implementation. No live URL checks or playback
+  tests were run during this audit.
+- GitHub search found issues #1–30, with supplemental exact-title lookups for
+  #31–43. At audit time #1–14 and #24–43 were CLOSED; #15–23 were OPEN. Closure
+  comments conflict with current documented evidence for #30, #39, #35, and
+  #43; issue state is not verification of acceptance criteria. See
+  [`PROJECT_STATUS.md`](PROJECT_STATUS.md) for the complete issue snapshot and
+  acceptance comparison.
+
+## Current Recommended Plan
+
+Order work by safety dependencies. Do not run production generation or publish
+content as part of this plan unless the required human decisions and safe target
+database are explicitly established.
+
+1. **Reconcile source approval (P0).** Assign a qualified content reviewer,
+   resolve the 19 review-sheet entries, document reproducible printed-edition
+   provenance or replace the source, and only then reconcile the registry
+   verification field. Keep generation blocked if this remains unresolved.
+2. **Configure trusted reviewer identity and authorization (P0).** Select an
+   identity provider, map verified identities to reviewer qualifications,
+   derive audit identity server-side, and enforce the checklist and source
+   validation at the API boundary. Keep introduction decisions at 503 until
+   this is implemented and tested. The shared password/free-text label is not
+   an acceptable reviewer identity.
+3. **Verify data in an isolated MongoDB (P0).** Configure an explicitly
+   disposable `MONGO_TEST_URI`; run introduction API, draft persistence,
+   source downgrade/version-change, and review transition integration tests.
+   Separately establish the current database’s content and audit state through
+   an authorized, non-production procedure.
+4. **Reconcile published explanations (P0).** Issue #39’s closure note says
+   111 per style were published but also reports review records missing. Audit
+   every published record against its review record, cited chunks, current
+   source version, and qualification policy before declaring content reviewed.
+5. **Complete public reading contracts (P1).** Implement/test `GET /surahs`,
+   introduction reader UI, style registry/availability and per-content
+   readiness; keep exact-style behavior and never substitute another style.
+   Validate OpenAPI and fixtures in CI.
+6. **Fix and test mobile parity (P1).** Fix the `StatusBar` typecheck, remove
+   the `|| true` CI suppression, align style identifiers with the backend,
+   make visible controls functional or remove them, and exercise audio on a
+   device/simulator.
+7. **Complete quality and launch readiness (P1/P2).** Make API failures
+   visible instead of treating them as empty data, add browser/device and
+   accessibility checks, resolve audio rights, refresh stale docs, and only
+   then execute deployment/backup/rollback and release QA issues #15–16.
+
+**Verification boundary:** passing Go tests/builds and a web build confirms
+code-level checks only. It does not establish that Mongo contains valid content,
+that live generation works, that generated claims are semantically supported,
+that a qualified human approved them, or that the UI works against a real
+service. Mongo tests skip without `MONGO_TEST_URI`; no database or external
+generation/audio command was run in the audit.
+
 ## 1) Executive Summary
 
 Tadbor is a Quran understanding application intended to present reader-facing Quranic text with RAG-grounded, human-reviewed explanations. The repository is a multi-app scaffold (Go backend, Next.js web reader/admin, Expo/React Native mobile) with MongoDB for storage and a deliberate pipeline of ingestion → retrieval → generation → mandatory human review before publication.

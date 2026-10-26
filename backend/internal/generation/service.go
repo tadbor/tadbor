@@ -1,8 +1,8 @@
 package generation
 
 import (
-	"context"
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
@@ -20,12 +20,25 @@ import (
 // see docs/rag-architecture-part1.md §15. requires_review is always true;
 // there is no code path that publishes without a human decision.
 type GenerationOutput struct {
-	Content        string   `json:"content"`
-	SourceRefs     []string `json:"source_refs"`
-	Claims         []string `json:"claims"`
-	Warnings       []string `json:"warnings"`
-	Confidence     string   `json:"confidence"`
-	RequiresReview bool     `json:"requires_review"`
+	Content          string                `json:"content"`
+	SourceRefs       []string              `json:"source_refs"`
+	Claims           []string              `json:"claims"`
+	Sections         []IntroductionSection `json:"sections,omitempty"`
+	DifferingReports []IntroductionClaim   `json:"differing_reports,omitempty"`
+	Warnings         []string              `json:"warnings"`
+	Confidence       string                `json:"confidence"`
+	RequiresReview   bool                  `json:"requires_review"`
+}
+
+type IntroductionSection struct {
+	Type   string              `json:"type"`
+	Title  string              `json:"title"`
+	Claims []IntroductionClaim `json:"claims"`
+}
+
+type IntroductionClaim struct {
+	Text       string   `json:"text"`
+	SourceRefs []string `json:"source_refs"`
 }
 
 type Request struct {
@@ -45,8 +58,10 @@ type Request struct {
 // doing it by hand — and a caller that forgets persists a citation like "1",
 // which resolves to nothing and reads as an explanation grounded in nothing.
 type Evidence struct {
-	ID   string
-	Text string
+	ID            string
+	Text          string
+	SourceID      string
+	SourceVersion string
 }
 
 // provider adapts the pipeline's generation contract to one vendor's wire
@@ -377,7 +392,7 @@ the failure this task must not make.`
 // them changes the version, so a review record cannot silently claim a prompt
 // version that no longer describes the prompt.
 func knownTasks() []string {
-	tasks := []string{"simplify", "translate", "adapt-dialect"}
+	tasks := []string{"simplify", "translate", "adapt-dialect", "introduce"}
 	sort.Strings(tasks)
 	return tasks
 }

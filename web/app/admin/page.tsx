@@ -1,9 +1,13 @@
-import Link from "next/link";
-
 import "./admin.css";
 
 import { passwordIsSet, reviewerName, reviewerPassword } from "./session";
-import { AuthError, fetchQueue, type QueueItem } from "./reviewer-client";
+import {
+  AuthError,
+  fetchIntroductionQueue,
+  fetchQueue,
+  type IntroductionQueueItem,
+  type QueueItem,
+} from "./reviewer-client";
 
 // The review queue is re-read on every request: a reviewer's next decision
 // depends on what other decisions have already landed.
@@ -58,8 +62,9 @@ export default async function AdminPage({
   }
 
   let queue: QueueItem[];
+  let introductionQueue: IntroductionQueueItem[];
   try {
-    queue = await fetchQueue(password);
+    [queue, introductionQueue] = await Promise.all([fetchQueue(password), fetchIntroductionQueue(password)]);
   } catch (err) {
     if (err instanceof AuthError) {
       return <LoginForm next="/admin" message="That password is no longer valid. Sign in again." />;
@@ -84,9 +89,9 @@ export default async function AdminPage({
         <div>
           <h1>Reviewer dashboard</h1>
           <p className="sub">
-            {queue.length === 0
+            {queue.length + introductionQueue.length === 0
               ? "Nothing is waiting for review."
-              : `${queue.length} explanation${queue.length === 1 ? "" : "s"} waiting for review.`}
+              : `${queue.length} explanation${queue.length === 1 ? "" : "s"} and ${introductionQueue.length} introduction${introductionQueue.length === 1 ? "" : "s"} waiting for review.`}
           </p>
         </div>
         <form action="/admin/logout" method="post" className="top-actions">
@@ -109,6 +114,8 @@ export default async function AdminPage({
               Not saved. Working through the checklist is required before approving — that is the
               point of the gate.
             </>
+          ) : searchParams.error === "introduction-identity-unavailable" ? (
+            <>Introduction decisions are disabled until trusted reviewer identity and authorization are configured.</>
           ) : searchParams.error === "session-expired" ? (
             <>Your password changed or expired. Sign in again.</>
           ) : (
@@ -117,16 +124,78 @@ export default async function AdminPage({
         </div>
       )}
 
-      {queue.length === 0 ? (
+      {queue.length + introductionQueue.length === 0 ? (
         <p className="empty">
-          Nothing pending. Generation writes explanations here with{" "}
-          <code>review_status: &quot;pending&quot;</code> — nothing does yet, so this queue stays
-          empty until the batch job in issue #10 runs.
+          Nothing is pending review.
         </p>
       ) : (
-        queue.map((item) => <ReviewCard key={item.id} item={item} reviewer={reviewer} />)
+        <>
+          {introductionQueue.map((item) => (
+            <IntroductionReviewCard key={item.id} item={item} />
+          ))}
+          {queue.map((item) => <ReviewCard key={item.id} item={item} reviewer={reviewer} />)}
+        </>
       )}
     </main>
+  );
+}
+
+function IntroductionReviewCard({ item }: { item: IntroductionQueueItem }) {
+  const blocked = item.missing_refs.length > 0 || Boolean(item.review_block_reason);
+  return (
+    <section className="card">
+      <div className="card-head">
+        <h2>Surah {item.surah_id} introduction <span className="tag">{item.style}</span></h2>
+        <code className="id">{item.id}</code>
+      </div>
+      {blocked && (
+        <div className="banner banner-block">
+          <strong>Approval blocked.</strong> {item.review_block_reason || "One or more cited evidence chunks are missing."}
+        </div>
+      )}
+      {item.sections.map((section, index) => (
+        <div className="panel" key={`${section.type}-${index}`}>
+          <h3>{section.title} <span className="tag">{section.type}</span></h3>
+          {section.claims.map((claim, claimIndex) => (
+            <p className="proposed" key={claimIndex}>
+              {claim.text} <span className="meta">Sources: {claim.source_refs.join(", ")}</span>
+            </p>
+          ))}
+        </div>
+      ))}
+      {item.differing_reports.length > 0 && (
+        <div className="panel">
+          <h3>Differing reports</h3>
+          {item.differing_reports.map((claim, index) => (
+            <p className="proposed" key={index}>
+              {claim.text} <span className="meta">Sources: {claim.source_refs.join(", ")}</span>
+            </p>
+          ))}
+        </div>
+      )}
+      <div className="panel">
+        <h3>Evidence <span className="count">{item.evidence.length}</span></h3>
+        {item.evidence.map((evidence) => (
+          <details className="chunk" key={evidence.chunk_id}>
+            <summary>
+              {evidence.source_title || evidence.source_id} — {evidence.source_author || evidence.source_id}
+              {evidence.source_edition ? ` (${evidence.source_edition})` : null}
+              {" · "}{evidence.source_version} · <code>{evidence.chunk_id.slice(0, 12)}</code>
+            </summary>
+            <p dir="rtl" lang="ar">{evidence.text}</p>
+            <p className="meta"><code>{evidence.content_hash}</code></p>
+          </details>
+        ))}
+        {item.missing_refs.map((ref) => <p className="missing" key={ref}>Missing evidence: <code>{ref}</code></p>)}
+      </div>
+      <p className="meta">
+        Source snapshot <code>{item.source_version_snapshot}</code>
+        {item.model_version ? <> · model <code>{item.model_version}</code></> : null}
+      </p>
+      <div className="banner banner-block">
+        <strong>Decisions disabled.</strong> The current shared-password login does not establish an individual reviewer identity or qualification. This draft cannot be approved or published until trusted reviewer authentication is configured.
+      </div>
+    </section>
   );
 }
 
